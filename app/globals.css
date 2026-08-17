@@ -1,26 +1,125 @@
 @import "tailwindcss";
+@source "../app";
+@source "../lib";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Berkeley Mono Design System */
+  --primary: #201d1d;
+  --on-primary: #fdfcfc;
+  --ink: #201d1d;
+  --ink-deep: #0f0000;
+  --charcoal: #302c2c;
+  --body: #424245;
+  --mute: #646262;
+  --stone: #6e6e73;
+  --ash: #9a9898;
+  --canvas: #fdfcfc;
+  --surface-soft: #f8f7f7;
+  --surface-card: #f1eeee;
+  --surface-dark: #201d1d;
+  --surface-dark-elevated: #302c2c;
+  --hairline: rgba(15,0,0,0.12);
+  --hairline-strong: #646262;
+  --on-dark: #fdfcfc;
+  --on-dark-mute: #9a9898;
+  --accent: #007aff;
+  --accent-hover: #0056b3;
+  --success: #30d158;
+  --danger: #ff3b30;
+  --warning: #ff9f0a;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-xxl: 32px;
+  
+  /* Border radius */
+  --radius-sm: 4px;
+  --radius-none: 0px;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--canvas);
+  --color-foreground: var(--ink);
+  --font-mono: var(--font-geist-mono), "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  font-family: var(--font-mono), monospace;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-mono), monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface-soft);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+}
+
+/* Focus styles */
+*:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background: var(--ink);
+  color: var(--canvas);
+}
+
+/* Monaco editor override - keep dark for code */
+.monaco-editor .monaco-editor-background,
+.monaco-editor .margin {
+  background-color: var(--surface-dark) !important;
+}
+
+/* Prose content */
+.prose-mono {
+  font-family: var(--font-mono), monospace;
+  color: var(--body);
+  line-height: 1.5;
+}
+
+/* Dark surface (terminal mockup) */
+.surface-dark {
+  background: var(--surface-dark);
+  color: var(--on-dark);
+}
+
+/* Hairline borders */
+.border-hairline {
+  border-color: var(--hairline);
+}
+.border-hairline-strong {
+  border-color: var(--hairline-strong);
+}
+
+/* Section rhythm */
+.section-gap {
+  margin-top: 96px;
+}
+
+/* ASCII tag prefix utility */
+.ascii-tag::before {
+  content: "[+] ";
+  color: var(--mute);
 }
