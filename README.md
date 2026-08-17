@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Delta — AI-Powered Technical Learning & Change Engine
+
+Delta is a terminal-native, monospaced learning platform designed for engineers to master rapidly changing technical domains. It automatically tracks technical changes, builds competency graphs, computes learning deltas, and generates sandboxed coding challenges to prove mastery.
+
+## Features
+
+- **Competency Graph Generator**: Maps skill prerequisites, optional modules, and specialization nodes using Groq LLMs.
+- **Technical Change Analyzer**: Scrapes and analyzes release notes, documentation updates, and technical announcements.
+- **Learning Delta Engine**: Calculates exact skill gaps and effort estimates when tech stacks update.
+- **Adaptive Code Sandbox**: Generates and executes coding challenges using Piston execution sandboxes with automated test assertion & counterexample analysis.
+- **Monochrome Terminal Design**: Monospaced Berkeley Mono aesthetics with zero distraction.
 
 ## Getting Started
 
-First, run the development server:
+First, install dependencies:
+
+```bash
+npm install
+```
+
+Set up environment variables in `.env.local`:
+
+```env
+GROQ_API_KEY=your_groq_api_key
+BRIGHT_DATA_API_KEY=your_bright_data_api_key
+```
+
+Run the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to launch Delta.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Architecture
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Framework**: Next.js 15 App Router
+- **Database & Auth**: Drizzle ORM (SQLite / Better-Auth)
+- **AI & Engine**: Groq SDK (Llama 3.3 70B)
+- **Code Execution**: Piston Sandbox API
+- **Scraper**: Cheerio HTML parser with fallback strategies
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
