@@ -1,377 +1,144 @@
-// ============================================================
-// Delta — Personal Technical Knowledge Engine
-// Complete Type System
-// ============================================================
-
-// ----------------------------------------------------------
-// User & Authentication
-// ----------------------------------------------------------
-
-export interface UserProfile {
+export interface Certification {
   id: string;
-  name: string;
-  email: string;
-  created_at: string;
-  updated_at: string;
-}
-
-// ----------------------------------------------------------
-// Goals
-// ----------------------------------------------------------
-
-export interface Goal {
-  id: string;
-  user_id: string;
-  title: string; // e.g. "Top-tier AI Engineer"
+  code: string;
+  title: string;
+  provider: string;
+  level: string;
+  official_url: string;
   description: string;
-  status: "active" | "paused" | "completed";
-  created_at: string;
-  updated_at: string;
+  icon_prefix: string;
 }
 
-// ----------------------------------------------------------
-// Competency Graph
-// ----------------------------------------------------------
-
-export type EvidenceStatus = "proven" | "partial" | "not_started" | "stale";
-
-export interface CompetencyNode {
+export interface ExamVersion {
   id: string;
-  goal_id: string;
-  name: string; // e.g. "Transformers"
-  category: string; // e.g. "Deep Learning"
+  certification_id: string;
+  version_code: string;
+  status: 'draft' | 'active' | 'retired';
+}
+
+export interface Domain {
+  id: string;
+  version_id: string;
+  domain_code: string;
+  title: string;
+  weight_percentage_min: number;
+  weight_percentage_max: number;
+  objectives?: Objective[];
+}
+
+export type FreshnessStatus = 'current' | 'needs_verification' | 'potentially_outdated' | 'confirmed_outdated';
+
+export interface Objective {
+  id: string;
+  domain_id: string;
+  objective_code: string;
+  title: string;
   description: string;
-  evidence_status: EvidenceStatus;
-  confidence: number; // 0.0 - 1.0
-  last_proven_at: string | null;
-  position_x: number; // for graph layout
-  position_y: number;
-  created_at: string;
+  freshness_status: FreshnessStatus;
 }
 
-export type EdgeRelationship =
-  | "prerequisite"
-  | "optional"
-  | "specialization"
-  | "shared";
+export interface BlueprintDiff {
+  from_version: string;
+  to_version: string;
+  diff_date: string;
+  added_objectives: string[];
+  deprecated_objectives: string[];
+  notes: string;
+}
 
-export interface CompetencyEdge {
+export interface ChangeEvent {
   id: string;
-  goal_id: string;
-  source_node_id: string;
-  target_node_id: string;
-  relationship: EdgeRelationship;
+  title: string;
+  summary: string;
+  effective_date: string;
+  change_type: string;
+  severity: 'breaking' | 'notice';
+  official_changelog_url: string;
 }
 
-export interface CompetencyGraph {
-  goal: Goal;
-  nodes: CompetencyNode[];
-  edges: CompetencyEdge[];
-}
-
-// ----------------------------------------------------------
-// Evidence Records
-// ----------------------------------------------------------
-
-export type EvidenceType =
-  | "challenge_passed"
-  | "source_mapped"
-  | "self_assessed"
-  | "project_completed";
-
-export interface EvidenceRecord {
+export interface Course {
   id: string;
-  user_id: string;
-  competency_node_id: string;
-  evidence_type: EvidenceType;
-  details: string;
-  confidence_delta: number; // how much confidence this evidence added
-  challenge_id?: string;
-  source_id?: string;
-  created_at: string;
-}
-
-// ----------------------------------------------------------
-// Technical Changes
-// ----------------------------------------------------------
-
-export type ChangeSignificance =
-  | "breaking"
-  | "new_capability"
-  | "deprecated"
-  | "new_best_practice"
-  | "cosmetic"
-  | "documentation";
-
-export type ChangeType =
-  | "new_release"
-  | "api_change"
-  | "framework_update"
-  | "model_release"
-  | "protocol_change"
-  | "tool_update";
-
-export interface TechnicalChange {
-  id: string;
+  certification_id: string;
   title: string;
   source_url: string;
-  source_title: string;
-  source_excerpt: string;
-  change_type: ChangeType;
-  significance: ChangeSignificance;
-  summary: string;
-  raw_content: string;
-  affected_technologies: string[]; // e.g. ["PyTorch", "CUDA"]
-  detected_at: string;
-  scraped_at: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  alignments?: AlignmentResult[];
 }
 
-// ----------------------------------------------------------
-// Change Impact
-// ----------------------------------------------------------
-
-export interface ChangeImpact {
+export interface AlignmentResult {
   id: string;
-  change_id: string;
-  competency_node_id: string;
-  goal_id: string;
-  user_id: string;
-  relevance_score: number; // 0.0 - 1.0
-  relevance_reason: string; // why this matters to the user
-  status: "new" | "acknowledged" | "resolved";
-  created_at: string;
+  course_id: string;
+  objective_id: string;
+  objective_code?: string;
+  objective_title?: string;
+  status: 'covered' | 'weak' | 'outdated' | 'missing' | 'not_applicable';
+  gap_analysis: string;
+  recommendation: string;
+  source_content_hash: string;
+  confidence_score: number;
 }
 
-// ----------------------------------------------------------
-// Learning Delta
-// ----------------------------------------------------------
+export type QuestionType = 'mcq' | 'multi_select' | 'sandbox' | 'ordering' | 'matching' | 'case_study';
 
-export type DeltaStatus = "known" | "partial" | "missing";
-
-export interface LearningDelta {
+export interface PracticeQuestion {
   id: string;
-  user_id: string;
-  change_id: string | null;
-  competency_node_id: string;
-  competency_name: string;
-  status: DeltaStatus;
-  required_concepts: string[];
-  estimated_hours: number;
-  created_at: string;
+  objective_id: string;
+  question_type: QuestionType;
+  stem: string;
+  options_json: string;
+  correct_answer: string;
+  explanation: string;
 }
 
-export interface LearningDeltaSummary {
-  user_id: string;
-  change_id: string | null;
-  known: LearningDelta[];
-  partial: LearningDelta[];
-  missing: LearningDelta[];
-  total_estimated_hours: number;
-}
-
-// ----------------------------------------------------------
-// Challenges
-// ----------------------------------------------------------
-
-export type ChallengeType =
-  | "implement"
-  | "debug"
-  | "configure"
-  | "simulate"
-  | "predict"
-  | "reproduce"
-  | "compare"
-  | "optimize"
-  | "find_bug"
-  | "break_system"
-  | "repair_system"
-  | "derive"
-  | "experiment";
-
-export type ChallengeDifficulty = "beginner" | "intermediate" | "advanced";
-
-export type VerificationMethod =
-  | "automated_tests"
-  | "property_tests"
-  | "output_comparison"
-  | "performance_benchmark";
-
-export interface Challenge {
+export interface PracticeAttempt {
   id: string;
-  competency_node_id: string;
-  change_id: string | null;
-  title: string;
-  description: string;
-  challenge_type: ChallengeType;
-  difficulty: ChallengeDifficulty;
-  language: string; // "python", "javascript", "typescript", etc.
-  starter_code: string;
-  test_code: string; // code that verifies the solution
-  expected_output: string | null;
-  verification_method: VerificationMethod;
-  estimated_minutes: number;
-  why_it_matters: string;
-  created_at: string;
+  question_id: string;
+  is_correct: boolean;
+  score_percentage: number;
+  feedback: string;
 }
 
-// ----------------------------------------------------------
-// Challenge Submissions & Verification
-// ----------------------------------------------------------
-
-export type SubmissionStatus = "passed" | "failed" | "error" | "running";
-
-export interface TestResult {
-  name: string;
-  passed: boolean;
-  input: string;
-  expected: string;
-  actual: string;
-  error?: string;
+export interface QuestionValidationResult {
+  is_valid: boolean;
+  has_outdated_services: boolean;
 }
 
-export interface CounterExample {
-  input: string;
-  your_result: string;
-  expected: string;
-  failure_trace: string;
-  invariant_violated: string;
+export type TeachingDepth = 'simply' | 'normally' | 'deeply';
+export type TeachingFormat = 'example' | 'diagram' | 'code' | 'analogy';
+export type TeachingDifficulty = 'easy' | 'exam' | 'hard';
+
+export interface TeachingStep {
+  text: string;
+  visual?: string;
 }
 
-export interface ChallengeSubmission {
+export interface TeachingSession {
   id: string;
-  challenge_id: string;
-  user_id: string;
-  code: string;
-  language: string;
-  status: SubmissionStatus;
-  execution_output: string;
-  test_results: TestResult[];
-  counterexamples: CounterExample[];
-  duration_ms: number;
-  submitted_at: string;
+  objective_id: string;
+  depth: TeachingDepth;
+  format: TeachingFormat;
+  steps: TeachingStep[];
 }
 
-// ----------------------------------------------------------
-// Sources (YouTube, GitHub, Docs, Papers, etc.)
-// ----------------------------------------------------------
-
-export type SourceType =
-  | "youtube"
-  | "github_repo"
-  | "documentation"
-  | "research_paper"
-  | "blog_post"
-  | "release_notes"
-  | "api_docs"
-  | "course"
-  | "pdf";
-
-export type IngestionStatus =
-  | "pending"
-  | "processing"
-  | "completed"
-  | "failed";
-
-export interface Source {
-  id: string;
-  user_id: string;
-  title: string;
-  url: string;
-  source_type: SourceType;
-  raw_content: string;
-  extracted_concepts: string[];
-  mapped_competency_ids: string[];
-  ingestion_status: IngestionStatus;
-  scraped_at: string | null;
-  created_at: string;
+export interface DomainReadiness {
+  domain_code: string;
+  score: number;
 }
 
-// ----------------------------------------------------------
-// Heatmap (Capability Evidence Over Time)
-// ----------------------------------------------------------
-
-export type HeatmapLevel = "proven" | "partial" | "none" | "stale";
-
-export interface HeatmapEntry {
-  date: string; // YYYY-MM-DD
-  competency_node_id: string;
-  level: HeatmapLevel;
-  evidence_count: number;
+export interface ReadinessScore {
+  overall_readiness_score: number;
+  pass_probability: number;
+  domain_breakdown: DomainReadiness[];
+  outdated_risks: string[];
 }
 
-export interface HeatmapDay {
-  date: string;
-  level: HeatmapLevel;
-  count: number;
+export interface SourceProvenance {
+  source_url: string;
+  content_hash: string;
 }
 
-// ----------------------------------------------------------
-// API Response Wrappers
-// ----------------------------------------------------------
+export type InsightCategory = 'VERIFIED' | 'INFERRED' | 'UNCERTAIN' | 'OUTDATED';
 
-export interface ApiResponse<T = unknown> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
-
-// ----------------------------------------------------------
-// Piston Code Execution
-// ----------------------------------------------------------
-
-export interface PistonExecuteRequest {
-  language: string;
-  version: string;
-  files: Array<{
-    name?: string;
-    content: string;
-  }>;
-  stdin?: string;
-  args?: string[];
-  compile_timeout?: number;
-  run_timeout?: number;
-}
-
-export interface PistonExecuteResponse {
-  language: string;
-  version: string;
-  run: {
-    stdout: string;
-    stderr: string;
-    code: number;
-    signal: string | null;
-    output: string;
-  };
-  compile?: {
-    stdout: string;
-    stderr: string;
-    code: number;
-    signal: string | null;
-    output: string;
-  };
-}
-
-export interface PistonRuntime {
-  language: string;
-  version: string;
-  aliases: string[];
-}
-
-// ----------------------------------------------------------
-// Understand Mode ("I want to understand this")
-// ----------------------------------------------------------
-
-export interface UnderstandRequest {
-  query: string; // e.g. "DeepSeek V4", a URL, a concept
-}
-
-export interface UnderstandResult {
-  what_it_is: string;
-  what_changed: string;
-  prerequisites: string[];
-  already_known: string[];
-  not_known: string[];
-  matters_for_goal: string;
-  next_steps: string[];
-  proof_method: string;
+export interface SourceClaim {
+  text: string;
 }
