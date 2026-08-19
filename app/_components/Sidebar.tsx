@@ -1,88 +1,195 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-
-const links = [
-  { href: "/", label: "learn", prefix: "[~]" },
-  { href: "/understand", label: "understand", prefix: "[?]" },
-  { href: "/practice", label: "practice", prefix: "[>]" },
-  { href: "/history", label: "history", prefix: "[#]" },
-];
-
-const settingsLinks = [
-  { href: "/settings", label: "settings", prefix: "[-]" },
-];
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentCert = searchParams.get('cert');
+  const [certs, setCerts] = useState<any[]>([]);
 
-  const isActive = (href: string) => {
-    if (href === "/") return pathname === "/";
-    return pathname.startsWith(href);
-  };
+  useEffect(() => {
+    fetch('/api/certifications')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          setCerts(data.data);
+        }
+      })
+      .catch(() => {});
+  }, [pathname, currentCert]);
 
   return (
-    <div className="flex h-full flex-col" style={{ borderRight: "1px solid var(--hairline)" }}>
-      {/* Wordmark */}
-      <div
-        className="px-6 flex items-center"
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        width: '100%',
+        background: 'var(--canvas)',
+        borderRight: '1px solid var(--hairline)',
+      }}
+    >
+      {/* Wordmark / Logo -> Home */}
+      <Link
+        href="/"
         style={{
-          height: "56px",
-          borderBottom: "1px solid var(--hairline)",
+          height: '72px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          borderBottom: '1px solid var(--hairline)',
+          flexShrink: 0,
+          textDecoration: 'none',
         }}
       >
+        <Image
+          src="/delta-logo.svg"
+          alt="Delta"
+          width={20}
+          height={20}
+          style={{ marginBottom: '4px' }}
+        />
         <span
-          className="font-bold text-[16px] tracking-widest"
-          style={{ color: "var(--ink)" }}
+          style={{
+            fontSize: '13px',
+            fontWeight: 700,
+            letterSpacing: '0.18em',
+            color: 'var(--ink)',
+          }}
         >
           DELTA
         </span>
+      </Link>
+
+      {/* Generate New Action */}
+      <div style={{ padding: '16px 16px 8px 16px' }}>
+        <Link
+          href="/"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 12px',
+            background: 'var(--surface-soft)',
+            border: '1px solid var(--hairline)',
+            borderRadius: '4px',
+            textDecoration: 'none',
+            color: 'var(--ink)',
+            fontWeight: 500,
+            fontSize: '13px',
+            lineHeight: 1.5,
+          }}
+        >
+          <span style={{ color: 'var(--ink)', fontWeight: 700 }}>[+]</span>
+          <span>generate new</span>
+        </Link>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 px-4 py-6 space-y-1">
-        {links.map((link) => {
-          const active = isActive(link.href);
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="flex items-center gap-2 px-2 py-[8px] text-[16px] leading-[1.5] transition-colors"
-              style={{
-                color: active ? "var(--ink)" : "var(--mute)",
-                fontWeight: active ? "500" : "400",
-              }}
-            >
-              <span style={{ color: "var(--ash)", fontWeight: "400" }}>{link.prefix}</span>
-              <span>{link.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* Bottom */}
+      {/* Generated Certificates List in Sidebar */}
       <div
-        className="px-4 pb-6 space-y-1"
-        style={{ borderTop: "1px solid var(--hairline)", paddingTop: "16px" }}
+        style={{
+          flex: 1,
+          padding: '12px 16px',
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
+        }}
       >
-        {settingsLinks.map((link) => {
-          const active = isActive(link.href);
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="flex items-center gap-2 px-2 py-[8px] text-[16px] leading-[1.5] transition-colors"
-              style={{
-                color: active ? "var(--ink)" : "var(--mute)",
-                fontWeight: active ? "500" : "400",
-              }}
-            >
-              <span style={{ color: "var(--ash)", fontWeight: "400" }}>{link.prefix}</span>
-              <span>{link.label}</span>
-            </Link>
-          );
-        })}
+        <p
+          style={{
+            fontSize: '12px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            color: 'var(--ash)',
+            margin: '8px 0 6px 0',
+            fontWeight: 700,
+          }}
+        >
+          [#] generated
+        </p>
+
+        {certs.length === 0 ? (
+          <p style={{ fontSize: '13px', color: 'var(--mute)', margin: '4px 0' }}>
+            [-] no certs yet
+          </p>
+        ) : (
+          certs.map((cert) => {
+            const isActive = currentCert === cert.id;
+            return (
+              <Link
+                key={cert.id}
+                href={`/prep?cert=${encodeURIComponent(cert.id)}`}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: '8px 10px',
+                  borderRadius: '4px',
+                  textDecoration: 'none',
+                  background: isActive ? 'var(--surface-card)' : 'transparent',
+                  border: isActive ? '1px solid var(--hairline-strong)' : '1px solid transparent',
+                  transition: 'background 0.15s',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span
+                    style={{
+                      fontSize: '13px',
+                      color: isActive ? 'var(--ink)' : 'var(--ash)',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {cert.code}
+                  </span>
+                </div>
+                <span
+                  style={{
+                    fontSize: '12px',
+                    color: isActive ? 'var(--ink)' : 'var(--mute)',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    lineHeight: 1.4,
+                    marginTop: '2px',
+                  }}
+                  title={cert.title}
+                >
+                  {cert.title}
+                </span>
+              </Link>
+            );
+          })
+        )}
+      </div>
+
+      {/* Bottom Settings */}
+      <div
+        style={{
+          padding: '16px',
+          borderTop: '1px solid var(--hairline)',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        <Link
+          href="/settings"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            textDecoration: 'none',
+            color: 'var(--mute)',
+            fontSize: '14px',
+          }}
+        >
+          <span style={{ color: 'var(--ash)' }}>[-]</span>
+          <span>settings</span>
+        </Link>
       </div>
     </div>
   );
