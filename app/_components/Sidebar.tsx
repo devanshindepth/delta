@@ -33,13 +33,12 @@ export default function Sidebar() {
         borderRight: '1px solid var(--hairline)',
       }}
     >
-      {/* Wordmark / Logo -> Home */}
+      {/* Logo -> Home */}
       <Link
         href="/"
         style={{
-          height: '72px',
+          height: '60px',
           display: 'flex',
-          flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center',
           borderBottom: '1px solid var(--hairline)',
@@ -50,20 +49,9 @@ export default function Sidebar() {
         <Image
           src="/delta-logo.svg"
           alt="Delta"
-          width={20}
-          height={20}
-          style={{ marginBottom: '4px' }}
+          width={22}
+          height={22}
         />
-        <span
-          style={{
-            fontSize: '13px',
-            fontWeight: 700,
-            letterSpacing: '0.18em',
-            color: 'var(--ink)',
-          }}
-        >
-          DELTA
-        </span>
       </Link>
 
       {/* Generate New Action */}

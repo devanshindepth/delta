@@ -10,7 +10,10 @@ export default function HomePage() {
   const [query, setQuery] = useState('');
   const [processing, setProcessing] = useState(false);
   const [processingLogs, setProcessingLogs] = useState<string[]>([]);
-  
+  // updatingId → log lines for that cert's update stream
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [updateLogs, setUpdateLogs] = useState<string[]>([]);
+
   const fetchCerts = async () => {
     try {
       const res = await fetch('/api/certifications');
@@ -86,10 +89,48 @@ export default function HomePage() {
 
   const handleUpdate = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
+    if (updatingId) return; // one at a time
+
+    setUpdatingId(id);
+    setUpdateLogs(["[~] starting content update…"]);
+
     try {
-      await fetch(`/api/certifications/${id}/update`, { method: 'POST' });
-      await fetchCerts();
-    } catch (err) {}
+      const res = await fetch(`/api/certifications/${id}/update`, { method: 'POST' });
+      if (!res.body) throw new Error("No stream body");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        // NDJSON — each chunk may contain multiple lines
+        const text = decoder.decode(value, { stream: true });
+        const lines = text.split('\n').filter(l => l.trim());
+
+        for (const line of lines) {
+          try {
+            const event = JSON.parse(line);
+            if (event.message) {
+              setUpdateLogs(prev => [...prev, event.message]);
+            }
+            if (event.type === 'done') {
+              await fetchCerts();
+            }
+          } catch {
+            // partial JSON chunk — skip
+          }
+        }
+      }
+    } catch (err: any) {
+      setUpdateLogs(prev => [...prev, `[-] error: ${err.message}`]);
+    } finally {
+      setTimeout(() => {
+        setUpdatingId(null);
+        setUpdateLogs([]);
+      }, 3000);
+    }
   };
 
   return (
@@ -175,6 +216,40 @@ export default function HomePage() {
         )}
       </div>
 
+      {/* Update progress overlay */}
+      {updatingId && (
+        <div style={{
+          position: 'fixed',
+          bottom: '32px',
+          right: '32px',
+          width: '420px',
+          background: 'var(--surface-dark)',
+          color: 'var(--on-dark)',
+          padding: '20px 24px',
+          borderRadius: '4px',
+          fontFamily: 'inherit',
+          fontSize: '13px',
+          lineHeight: 1.6,
+          zIndex: 1000,
+          maxHeight: '320px',
+          overflowY: 'auto',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: '12px', color: 'var(--on-dark)', fontSize: '14px' }}>
+            [~] updating course content
+          </div>
+          {updateLogs.map((log, i) => (
+            <div key={i} style={{
+              marginBottom: '4px',
+              color: log.startsWith('[-]') ? 'var(--danger)' : log.startsWith('[+]') ? 'var(--success)' : log.startsWith('[~]') ? 'var(--warning)' : 'var(--on-dark)',
+            }}>
+              {log}
+            </div>
+          ))}
+          <div style={{ display: 'inline-block', width: '8px', animation: 'blink 1s step-end infinite', color: 'var(--on-dark)' }}>_</div>
+        </div>
+      )}
+
       {/* Cards Grid Section */}
       <div style={{ width: '100%' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid var(--hairline)', paddingBottom: '12px' }}>
@@ -201,7 +276,8 @@ export default function HomePage() {
                 key={cert.id} 
                 cert={cert} 
                 onClick={() => router.push(`/prep?cert=${encodeURIComponent(cert.id)}`)} 
-                onUpdate={(e) => handleUpdate(e, cert.id)} 
+                onUpdate={(e) => handleUpdate(e, cert.id)}
+                isUpdating={updatingId === cert.id}
               />
             ))}
           </div>
@@ -211,7 +287,12 @@ export default function HomePage() {
   );
 }
 
-function CertCard({ cert, onClick, onUpdate }: { cert: any, onClick: () => void, onUpdate: (e: React.MouseEvent) => void }) {
+function CertCard({ cert, onClick, onUpdate, isUpdating }: { 
+  cert: any;
+  onClick: () => void;
+  onUpdate: (e: React.MouseEvent) => void;
+  isUpdating: boolean;
+}) {
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -230,12 +311,12 @@ function CertCard({ cert, onClick, onUpdate }: { cert: any, onClick: () => void,
         height: '180px',
         boxSizing: 'border-box',
         transition: 'background 0.15s, border-color 0.15s',
-        borderColor: hovered ? 'var(--ink)' : 'var(--hairline)',
+        borderColor: isUpdating ? 'var(--warning)' : hovered ? 'var(--ink)' : 'var(--hairline)',
         position: 'relative'
       }}
     >
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
-        {hovered ? (
+        {hovered && !isUpdating ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', width: '100%' }}>
             <span 
               style={{ 
@@ -282,6 +363,11 @@ function CertCard({ cert, onClick, onUpdate }: { cert: any, onClick: () => void,
             >
               [~] update content
             </button>
+          </div>
+        ) : isUpdating ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '13px', color: 'var(--warning)', fontWeight: 500 }}>[~] updating…</span>
+            <span style={{ fontSize: '12px', color: 'var(--stone)' }}>scraping & enriching objectives</span>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>

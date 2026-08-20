@@ -78,17 +78,36 @@ function LoopContent() {
     setHasQuestion(null);
   }, [currentIdx]);
 
+  const [teachError, setTeachError] = useState<{
+    message: string;
+    sourceUrl?: string;
+    reason?: string;
+    statusLabel?: string;
+  } | null>(null);
+
   // Load teaching content for the current objective
-  const loadTeachContent = useCallback(async (objectiveId: string) => {
+  const loadTeachContent = useCallback(async (objectiveId: string, force: boolean = false) => {
     setTeachLoading(true);
+    setTeachError(null);
     try {
-      const res = await fetch(`/api/objectives/${objectiveId}/teach`);
+      const res = await fetch(`/api/objectives/${objectiveId}/teach${force ? '?force=true' : ''}`);
       const data = await res.json();
       if (data.success && data.data) {
         setTeachContent(data.data);
+      } else {
+        setTeachError({
+          message: data.user_message || "We couldn't verify enough information from the official documentation to create a reliable lesson.",
+          sourceUrl: data.scrape_status?.source_url,
+          reason: data.reason || data.error,
+          statusLabel: data.scrape_status?.outcome === 'failed' ? 'Extraction incomplete' : 'Documentation unavailable'
+        });
       }
     } catch (err) {
       console.error('[loop] loadTeachContent error:', err);
+      setTeachError({
+        message: "We encountered a temporary network issue connecting to the learning pipeline.",
+        statusLabel: "Connection error"
+      });
     } finally {
       setTeachLoading(false);
     }
@@ -443,22 +462,108 @@ function LoopContent() {
               <div key={i} className="animate-pulse" style={{ height: i === 1 ? '80px' : '60px', background: 'var(--surface-card)', borderRadius: '4px' }} />
             ))}
           </div>
+        ) : teachError ? (
+          <div
+            style={{
+              padding: '24px',
+              background: 'var(--surface-soft)',
+              border: '1px solid var(--hairline-strong)',
+              borderRadius: '4px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+              marginBottom: '32px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  background: 'var(--surface-dark)',
+                  color: 'var(--on-dark)',
+                }}
+              >
+                [!] lesson notice
+              </span>
+              <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ink)' }}>
+                We couldn&apos;t build this lesson yet.
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: 'var(--body)' }}>
+              {teachError.sourceUrl && (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <span style={{ fontWeight: 600, color: 'var(--ink)', minWidth: '80px' }}>Source:</span>
+                  <a
+                    href={teachError.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: 'var(--ink)', textDecoration: 'underline', wordBreak: 'break-all' }}
+                  >
+                    {teachError.sourceUrl}
+                  </a>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <span style={{ fontWeight: 600, color: 'var(--ink)', minWidth: '80px' }}>Status:</span>
+                <span>{teachError.statusLabel || 'Extraction incomplete'}</span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <span style={{ fontWeight: 600, color: 'var(--ink)', minWidth: '80px' }}>Action:</span>
+                <span>{teachError.message || "We couldn't verify enough information from the official documentation to create a reliable lesson."}</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              <button
+                onClick={() => loadTeachContent(objective.id, true)}
+                disabled={teachLoading}
+                style={{
+                  padding: '6px 16px',
+                  background: 'var(--ink)',
+                  color: 'var(--canvas)',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  cursor: teachLoading ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                {teachLoading ? '[~] retrying extraction…' : '[~] retry source extraction'}
+              </button>
+            </div>
+          </div>
         ) : teachContent ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0', marginBottom: '32px' }}>
 
             {/* What it is */}
             <div style={{ padding: '24px 0', borderBottom: '1px solid var(--hairline)' }}>
               <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', marginBottom: '12px', letterSpacing: '0.05em' }}>[+] what it is</p>
-              <p style={{ fontSize: '16px', color: 'var(--body)', lineHeight: 1.7, margin: 0 }}>
-                {teachContent.what_it_is}
-              </p>
+              {Array.isArray(teachContent.what_it_is) ? (
+                <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {teachContent.what_it_is.map((item: string, i: number) => (
+                    <li key={i} style={{ display: 'flex', gap: '10px', fontSize: '15px', color: 'var(--body)', lineHeight: 1.6, alignItems: 'flex-start' }}>
+                      <span style={{ color: 'var(--ink)', fontWeight: 700, flexShrink: 0 }}>•</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p style={{ fontSize: '16px', color: 'var(--body)', lineHeight: 1.7, margin: 0 }}>
+                  {teachContent.what_it_is}
+                </p>
+              )}
             </div>
 
             {/* Analogy */}
             {teachContent.analogy && (
               <div style={{ padding: '24px 0', borderBottom: '1px solid var(--hairline)' }}>
                 <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', marginBottom: '12px', letterSpacing: '0.05em' }}>[~] think of it like this</p>
-                <div style={{ padding: '16px', background: 'var(--surface-dark)', color: 'var(--on-dark)' }}>
+                <div style={{ padding: '16px', background: 'var(--surface-dark)', color: 'var(--on-dark)', borderRadius: '4px' }}>
                   <span style={{ color: 'var(--ash)', marginRight: '8px' }}>$</span>
                   <span style={{ fontSize: '15px', lineHeight: 1.6 }}>{teachContent.analogy}</span>
                 </div>
@@ -469,9 +574,20 @@ function LoopContent() {
             {teachContent.why_it_exists && (
               <div style={{ padding: '24px 0', borderBottom: '1px solid var(--hairline)' }}>
                 <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', marginBottom: '12px', letterSpacing: '0.05em' }}>[&gt;] why it exists</p>
-                <p style={{ fontSize: '16px', color: 'var(--body)', lineHeight: 1.7, margin: 0 }}>
-                  {teachContent.why_it_exists}
-                </p>
+                {Array.isArray(teachContent.why_it_exists) ? (
+                  <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {teachContent.why_it_exists.map((item: string, i: number) => (
+                      <li key={i} style={{ display: 'flex', gap: '10px', fontSize: '15px', color: 'var(--body)', lineHeight: 1.6, alignItems: 'flex-start' }}>
+                        <span style={{ color: 'var(--ink)', fontWeight: 700, flexShrink: 0 }}>•</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p style={{ fontSize: '16px', color: 'var(--body)', lineHeight: 1.7, margin: 0 }}>
+                    {teachContent.why_it_exists}
+                  </p>
+                )}
               </div>
             )}
 
@@ -479,9 +595,22 @@ function LoopContent() {
             {teachContent.how_it_works && (
               <div style={{ padding: '24px 0', borderBottom: '1px solid var(--hairline)' }}>
                 <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', marginBottom: '12px', letterSpacing: '0.05em' }}>[#] how it works</p>
-                <p style={{ fontSize: '16px', color: 'var(--body)', lineHeight: 1.7, margin: 0 }}>
-                  {teachContent.how_it_works}
-                </p>
+                {Array.isArray(teachContent.how_it_works) ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {teachContent.how_it_works.map((step: string, idx: number) => (
+                      <div key={idx} style={{ display: 'flex', gap: '12px', fontSize: '15px', color: 'var(--body)', lineHeight: 1.6, alignItems: 'flex-start' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ink)', padding: '1px 6px', background: 'var(--canvas)', border: '1px solid var(--hairline-strong)', borderRadius: '3px', flexShrink: 0, marginTop: '2px' }}>
+                          0{idx + 1}
+                        </span>
+                        <span>{step}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: '16px', color: 'var(--body)', lineHeight: 1.7, margin: 0 }}>
+                    {teachContent.how_it_works}
+                  </p>
+                )}
               </div>
             )}
 
@@ -491,8 +620,8 @@ function LoopContent() {
                 <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', marginBottom: '16px', letterSpacing: '0.05em' }}>[*] key concepts</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {teachContent.key_concepts.map((kc: any, i: number) => (
-                    <div key={i} style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--ink)', flexShrink: 0, minWidth: '140px', paddingTop: '1px' }}>
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '16px', alignItems: 'baseline', paddingBottom: '10px', borderBottom: i < teachContent.key_concepts.length - 1 ? '1px dashed var(--hairline)' : 'none' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)', wordBreak: 'break-word' }}>
                         {kc.term}
                       </span>
                       <span style={{ fontSize: '14px', color: 'var(--body)', lineHeight: 1.6 }}>
@@ -509,9 +638,9 @@ function LoopContent() {
               <div style={{ padding: '24px 0', borderBottom: '1px solid var(--hairline)' }}>
                 <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', marginBottom: '12px', letterSpacing: '0.05em' }}>[-] common mistakes</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {teachContent.common_mistakes.map((m: string, i: number) => (
+                  {(Array.isArray(teachContent.common_mistakes) ? teachContent.common_mistakes : [teachContent.common_mistakes]).map((m: string, i: number) => (
                     <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                      <span style={{ color: 'var(--danger)', flexShrink: 0, fontSize: '14px' }}>[-]</span>
+                      <span style={{ color: 'var(--ink)', fontWeight: 700, flexShrink: 0, fontSize: '14px' }}>×</span>
                       <span style={{ fontSize: '14px', color: 'var(--body)', lineHeight: 1.6 }}>{m}</span>
                     </div>
                   ))}
@@ -522,8 +651,8 @@ function LoopContent() {
             {/* Exam tip */}
             {teachContent.exam_tip && (
               <div style={{ padding: '24px 0' }}>
-                <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', marginBottom: '12px', letterSpacing: '0.05em' }}>[?] exam tip</p>
-                <div style={{ padding: '16px', border: '1px solid var(--hairline-strong)', background: 'var(--surface-soft)' }}>
+                <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', marginBottom: '12px', letterSpacing: '0.05em' }}>[?] key exam point</p>
+                <div style={{ padding: '16px', border: '1px solid var(--hairline-strong)', background: 'var(--surface-soft)', borderRadius: '4px' }}>
                   <p style={{ fontSize: '15px', color: 'var(--ink)', lineHeight: 1.6, margin: 0 }}>
                     {teachContent.exam_tip}
                   </p>

@@ -22,6 +22,12 @@ function PrepContent() {
 
   // Teach & Question states
   const [teachContent, setTeachContent] = useState<any>(null);
+  const [teachError, setTeachError] = useState<{
+    message: string;
+    sourceUrl?: string;
+    reason?: string;
+    statusLabel?: string;
+  } | null>(null);
   const [teachLoading, setTeachLoading] = useState(false);
   const [question, setQuestion] = useState<any>(null);
   const [questionLoading, setQuestionLoading] = useState(false);
@@ -34,6 +40,10 @@ function PrepContent() {
   const [matchingState, setMatchingState] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ isCorrect: boolean; explanation: string; officialDocUrl?: string } | null>(null);
+
+  // Live content update state
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateLogs, setUpdateLogs] = useState<string[]>([]);
 
   // Load cert and objectives
   const loadData = useCallback(async () => {
@@ -70,17 +80,29 @@ function PrepContent() {
   }, [loadData]);
 
   // Load teach content for current objective
-  const loadTeach = useCallback(async (objId: string) => {
+  const loadTeach = useCallback(async (objId: string, force: boolean = false) => {
     setTeachLoading(true);
     setTeachContent(null);
+    setTeachError(null);
     try {
-      const res = await fetch(`/api/objectives/${objId}/teach`);
+      const res = await fetch(`/api/objectives/${objId}/teach${force ? '?force=true' : ''}`);
       const data = await res.json();
       if (data.success && data.data) {
         setTeachContent(data.data);
+      } else {
+        setTeachError({
+          message: data.user_message || "We couldn't verify enough information from the official documentation to create a reliable lesson.",
+          sourceUrl: data.scrape_status?.source_url,
+          reason: data.reason || data.error,
+          statusLabel: data.scrape_status?.outcome === 'failed' ? 'Extraction incomplete' : 'Documentation unavailable'
+        });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('[prep] loadTeach error:', err);
+      setTeachError({
+        message: "We encountered a temporary network issue connecting to the learning pipeline.",
+        statusLabel: "Connection error"
+      });
     } finally {
       setTeachLoading(false);
     }
@@ -199,6 +221,63 @@ function PrepContent() {
     }
   };
 
+  const handleUpdateCert = async () => {
+    if (isUpdating || !certId) return;
+
+    setIsUpdating(true);
+    setUpdateLogs(['[~] starting content update…']);
+
+    try {
+      const res = await fetch(`/api/certifications/${encodeURIComponent(certId)}/update`, { method: 'POST' });
+      if (!res.body) throw new Error('No stream body');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value, { stream: true });
+        const lines = text.split('\n').filter(l => l.trim());
+
+        for (const line of lines) {
+          try {
+            const event = JSON.parse(line);
+            if (event.message) {
+              setUpdateLogs(prev => [...prev, event.message]);
+            }
+            if (event.type === 'done') {
+              const currentObj = objectives[currentIdx];
+              if (currentObj) {
+                if (mode === 'read' || mode === 'interleaved') {
+                  loadTeach(currentObj.id);
+                }
+                if (mode === 'practice') {
+                  loadQuestion(currentObj.id);
+                }
+              }
+              // Refresh stats
+              fetch(`/api/certifications/${encodeURIComponent(certId)}/stats`)
+                .then(r => r.json())
+                .then(s => { if (s.success) setStats(s.data); })
+                .catch(() => {});
+            }
+          } catch {
+            // skip chunk
+          }
+        }
+      }
+    } catch (err: any) {
+      setUpdateLogs(prev => [...prev, `[-] error: ${err.message}`]);
+    } finally {
+      setTimeout(() => {
+        setIsUpdating(false);
+        setUpdateLogs([]);
+      }, 3000);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ maxWidth: '960px', width: '100%', margin: '0 auto', padding: '64px 32px' }}>
@@ -235,6 +314,19 @@ function PrepContent() {
   const currentObj = objectives[currentIdx] || { title: 'General', objective_code: '1.0', description: cert.description };
   const readiness = stats?.readinessScore ?? 0;
 
+  const getOptionData = (opt: any, idx: number) => {
+    if (typeof opt === 'string') {
+      const id = `opt-${String.fromCharCode(97 + idx)}`;
+      const label = String.fromCharCode(65 + idx);
+      const text = opt;
+      return { id, label, text };
+    }
+    const id = opt?.id ? String(opt.id) : `opt-${String.fromCharCode(97 + idx)}`;
+    const label = opt?.id ? String(opt.id).replace(/^opt-/, '').toUpperCase() : String.fromCharCode(65 + idx);
+    const text = opt?.text || opt?.label || String(opt || '');
+    return { id, label, text };
+  };
+
   return (
     <div style={{ width: '100%', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       
@@ -255,28 +347,28 @@ function PrepContent() {
             margin: '0 auto',
             padding: '0 24px',
             height: '60px',
-            display: 'flex',
+            display: 'grid',
+            gridTemplateColumns: '1fr auto 1fr',
             alignItems: 'center',
-            justifyContent: 'space-between',
             gap: '16px',
           }}
         >
-          {/* Back & Breadcrumb */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-            <Link
-              href="/"
+          {/* Left: Progress Badge & Breadcrumb */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', justifySelf: 'start' }}>
+            <span
               style={{
-                fontSize: '13px',
-                color: 'var(--mute)',
-                textDecoration: 'none',
-                padding: '4px 8px',
-                border: '1px solid var(--hairline)',
+                fontSize: '12px',
+                padding: '3px 8px',
                 borderRadius: '4px',
+                border: '1px solid var(--hairline-strong)',
+                color: 'var(--ink)',
+                fontWeight: 600,
+                fontFamily: 'inherit',
                 whiteSpace: 'nowrap',
               }}
             >
-              ← home
-            </Link>
+              {readiness}% mastered
+            </span>
             <span style={{ color: 'var(--hairline-strong)' }}>/</span>
             <span
               style={{
@@ -292,8 +384,8 @@ function PrepContent() {
             </span>
           </div>
 
-          {/* Mode Switcher Tabs */}
-          <nav style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          {/* Center: Mode Switcher Tabs */}
+          <nav style={{ display: 'flex', alignItems: 'center', gap: '6px', justifySelf: 'center' }}>
             <button
               onClick={() => setMode('read')}
               style={{
@@ -349,20 +441,43 @@ function PrepContent() {
             </button>
           </nav>
 
-          {/* Readiness Score */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-            <span
+          {/* Right: Update Button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifySelf: 'end' }}>
+            <button
+              onClick={handleUpdateCert}
+              disabled={isUpdating}
               style={{
                 fontSize: '12px',
-                padding: '2px 8px',
-                borderRadius: '4px',
+                color: isUpdating ? 'var(--ash)' : 'var(--ink)',
+                background: 'var(--canvas)',
                 border: '1px solid var(--hairline-strong)',
-                color: 'var(--ink)',
+                borderRadius: '4px',
+                padding: '4px 10px',
+                cursor: isUpdating ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit',
                 fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={(e) => {
+                if (!isUpdating) {
+                  e.currentTarget.style.borderColor = 'var(--ink)';
+                  e.currentTarget.style.background = 'var(--ink)';
+                  e.currentTarget.style.color = 'var(--canvas)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isUpdating) {
+                  e.currentTarget.style.borderColor = 'var(--hairline-strong)';
+                  e.currentTarget.style.background = 'var(--canvas)';
+                  e.currentTarget.style.color = 'var(--ink)';
+                }
               }}
             >
-              {readiness}% ready
-            </span>
+              {isUpdating ? '[~] updating…' : '[~] update content'}
+            </button>
           </div>
         </div>
       </header>
@@ -445,45 +560,184 @@ function PrepContent() {
                 <div className="animate-pulse" style={{ height: '80px', background: 'var(--surface-card)', borderRadius: '4px' }} />
                 <div className="animate-pulse" style={{ height: '140px', background: 'var(--surface-card)', borderRadius: '4px' }} />
               </div>
+            ) : teachError ? (
+              <div
+                style={{
+                  padding: '24px',
+                  background: 'var(--surface-soft)',
+                  border: '1px solid var(--hairline-strong)',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      background: 'var(--surface-dark)',
+                      color: 'var(--on-dark)',
+                    }}
+                  >
+                    [!] lesson notice
+                  </span>
+                  <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ink)' }}>
+                    We couldn&apos;t build this lesson yet.
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: 'var(--body)' }}>
+                  {teachError.sourceUrl && (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <span style={{ fontWeight: 600, color: 'var(--ink)', minWidth: '80px' }}>Source:</span>
+                      <a
+                        href={teachError.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: 'var(--ink)', textDecoration: 'underline', wordBreak: 'break-all' }}
+                      >
+                        {teachError.sourceUrl}
+                      </a>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--ink)', minWidth: '80px' }}>Status:</span>
+                    <span>{teachError.statusLabel || 'Extraction incomplete'}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--ink)', minWidth: '80px' }}>Action:</span>
+                    <span>{teachError.message || "We couldn't verify enough information from the official documentation to create a reliable lesson. You can retry or choose another objective."}</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                  <button
+                    onClick={() => {
+                      const currentObj = objectives[currentIdx];
+                      if (currentObj) loadTeach(currentObj.id, true);
+                    }}
+                    disabled={teachLoading}
+                    style={{
+                      padding: '6px 16px',
+                      background: 'var(--ink)',
+                      color: 'var(--canvas)',
+                      border: 'none',
+                      borderRadius: '4px',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      cursor: teachLoading ? 'not-allowed' : 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {teachLoading ? '[~] retrying extraction…' : '[~] retry source extraction'}
+                  </button>
+                  {currentIdx < objectives.length - 1 && (
+                    <button
+                      onClick={handleNextObjective}
+                      style={{
+                        padding: '6px 16px',
+                        background: 'transparent',
+                        color: 'var(--ink)',
+                        border: '1px solid var(--hairline-strong)',
+                        borderRadius: '4px',
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      skip to next objective →
+                    </button>
+                  )}
+                </div>
+              </div>
             ) : teachContent ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 
                 {/* What it is */}
                 <section style={{ padding: '20px', background: 'var(--surface-soft)', border: '1px solid var(--hairline)', borderRadius: '4px' }}>
-                  <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 8px 0' }}>[+] what it is</p>
-                  <p style={{ fontSize: '15px', color: 'var(--body)', lineHeight: 1.6, margin: 0 }}>
-                    {teachContent.what_it_is}
-                  </p>
+                  <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 12px 0' }}>[+] what it is</p>
+                  {Array.isArray(teachContent.what_it_is) ? (
+                    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {teachContent.what_it_is.map((item: string, i: number) => (
+                        <li key={i} style={{ display: 'flex', gap: '10px', fontSize: '14px', color: 'var(--body)', lineHeight: 1.6, alignItems: 'flex-start' }}>
+                          <span style={{ color: 'var(--ink)', fontWeight: 700, flexShrink: 0 }}>•</span>
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p style={{ fontSize: '14px', color: 'var(--body)', lineHeight: 1.6, margin: 0 }}>
+                      {teachContent.what_it_is}
+                    </p>
+                  )}
                 </section>
 
                 {/* Analogy / Proof */}
                 {teachContent.analogy && (
                   <section style={{ padding: '16px 20px', background: 'var(--surface-dark)', color: 'var(--on-dark)', borderRadius: '4px' }}>
-                    <p style={{ fontSize: '12px', color: 'var(--ash)', margin: '0 0 6px 0' }}>$ analogy</p>
-                    <p style={{ fontSize: '14px', lineHeight: 1.6, margin: 0 }}>
+                    <p style={{ fontSize: '12px', color: 'var(--ash)', margin: '0 0 6px 0' }}>$ intuition</p>
+                    <p style={{ fontSize: '14px', lineHeight: 1.6, margin: 0, color: 'var(--on-dark)' }}>
                       {teachContent.analogy}
                     </p>
+                  </section>
+                )}
+
+                {/* Why it exists */}
+                {teachContent.why_it_exists && (
+                  <section style={{ padding: '20px', background: 'var(--surface-soft)', border: '1px solid var(--hairline)', borderRadius: '4px' }}>
+                    <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 12px 0' }}>[~] why it exists</p>
+                    {Array.isArray(teachContent.why_it_exists) ? (
+                      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {teachContent.why_it_exists.map((item: string, i: number) => (
+                          <li key={i} style={{ display: 'flex', gap: '10px', fontSize: '14px', color: 'var(--body)', lineHeight: 1.6, alignItems: 'flex-start' }}>
+                            <span style={{ color: 'var(--ink)', fontWeight: 700, flexShrink: 0 }}>•</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p style={{ fontSize: '14px', color: 'var(--body)', lineHeight: 1.6, margin: 0 }}>
+                        {teachContent.why_it_exists}
+                      </p>
+                    )}
                   </section>
                 )}
 
                 {/* How it works */}
                 {teachContent.how_it_works && (
                   <section style={{ padding: '20px', background: 'var(--surface-soft)', border: '1px solid var(--hairline)', borderRadius: '4px' }}>
-                    <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 8px 0' }}>[#] how it works under the hood</p>
-                    <p style={{ fontSize: '15px', color: 'var(--body)', lineHeight: 1.6, margin: 0 }}>
-                      {teachContent.how_it_works}
-                    </p>
+                    <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 12px 0' }}>[#] how it works under the hood</p>
+                    {Array.isArray(teachContent.how_it_works) ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {teachContent.how_it_works.map((step: string, idx: number) => (
+                          <div key={idx} style={{ display: 'flex', gap: '12px', fontSize: '14px', color: 'var(--body)', lineHeight: 1.6, alignItems: 'flex-start' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ink)', padding: '1px 6px', background: 'var(--canvas)', border: '1px solid var(--hairline-strong)', borderRadius: '3px', flexShrink: 0, marginTop: '2px' }}>
+                              0{idx + 1}
+                            </span>
+                            <span>{step}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: '14px', color: 'var(--body)', lineHeight: 1.6, margin: 0 }}>
+                        {teachContent.how_it_works}
+                      </p>
+                    )}
                   </section>
                 )}
 
                 {/* Key Concepts */}
                 {teachContent.key_concepts?.length > 0 && (
                   <section style={{ padding: '20px', background: 'var(--surface-soft)', border: '1px solid var(--hairline)', borderRadius: '4px' }}>
-                    <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 12px 0' }}>[*] key concepts</p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 14px 0' }}>[*] key concepts</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {teachContent.key_concepts.map((kc: any, i: number) => (
-                        <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'baseline' }}>
-                          <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)', minWidth: '130px', flexShrink: 0 }}>
+                        <div key={i} style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '16px', alignItems: 'baseline', paddingBottom: '10px', borderBottom: i < teachContent.key_concepts.length - 1 ? '1px dashed var(--hairline)' : 'none' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', wordBreak: 'break-word' }}>
                             {kc.term}
                           </span>
                           <span style={{ fontSize: '14px', color: 'var(--body)', lineHeight: 1.5 }}>
@@ -497,11 +751,14 @@ function PrepContent() {
 
                 {/* Common Mistakes */}
                 {teachContent.common_mistakes?.length > 0 && (
-                  <section style={{ padding: '20px', border: '1px solid var(--hairline)', borderRadius: '4px' }}>
+                  <section style={{ padding: '20px', border: '1px solid var(--hairline)', borderRadius: '4px', background: 'var(--canvas)' }}>
                     <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 10px 0' }}>[-] common misconceptions</p>
-                    <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      {teachContent.common_mistakes.map((m: string, i: number) => (
-                        <li key={i} style={{ fontSize: '14px', color: 'var(--body)', lineHeight: 1.5 }}>{m}</li>
+                    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {(Array.isArray(teachContent.common_mistakes) ? teachContent.common_mistakes : [teachContent.common_mistakes]).map((m: string, i: number) => (
+                        <li key={i} style={{ display: 'flex', gap: '10px', fontSize: '14px', color: 'var(--body)', lineHeight: 1.5, alignItems: 'flex-start' }}>
+                          <span style={{ color: 'var(--ink)', fontWeight: 700, flexShrink: 0 }}>×</span>
+                          <span>{m}</span>
+                        </li>
                       ))}
                     </ul>
                   </section>
@@ -509,9 +766,9 @@ function PrepContent() {
 
                 {/* Exam Tip */}
                 {teachContent.exam_tip && (
-                  <div style={{ padding: '16px 20px', border: '1px solid var(--hairline-strong)', borderRadius: '4px' }}>
-                    <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 6px 0' }}>[?] exam takeaway</p>
-                    <p style={{ fontSize: '14px', color: 'var(--ink)', margin: 0, lineHeight: 1.5 }}>{teachContent.exam_tip}</p>
+                  <div style={{ padding: '16px 20px', border: '1px solid var(--hairline-strong)', borderRadius: '4px', background: 'var(--surface-card)' }}>
+                    <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 6px 0' }}>[?] key exam point</p>
+                    <p style={{ fontSize: '14px', color: 'var(--ink)', margin: 0, lineHeight: 1.6, fontWeight: 500 }}>{teachContent.exam_tip}</p>
                   </div>
                 )}
 
@@ -572,28 +829,215 @@ function PrepContent() {
 
                 {teachLoading ? (
                   <div className="animate-pulse" style={{ height: '240px', background: 'var(--surface-card)', borderRadius: '4px' }} />
-                ) : teachContent ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    <div style={{ padding: '20px', background: 'var(--surface-soft)', border: '1px solid var(--hairline)', borderRadius: '4px' }}>
-                      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 8px 0' }}>[+] what it is</p>
-                      <p style={{ fontSize: '15px', color: 'var(--body)', lineHeight: 1.6, margin: 0 }}>
-                        {teachContent.what_it_is}
-                      </p>
+                ) : teachError ? (
+                  <div
+                    style={{
+                      padding: '24px',
+                      background: 'var(--surface-soft)',
+                      border: '1px solid var(--hairline-strong)',
+                      borderRadius: '4px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '16px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span
+                        style={{
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          background: 'var(--surface-dark)',
+                          color: 'var(--on-dark)',
+                        }}
+                      >
+                        [!] lesson notice
+                      </span>
+                      <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ink)' }}>
+                        We couldn&apos;t build this lesson yet.
+                      </span>
                     </div>
 
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: 'var(--body)' }}>
+                      {teachError.sourceUrl && (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <span style={{ fontWeight: 600, color: 'var(--ink)', minWidth: '80px' }}>Source:</span>
+                          <a
+                            href={teachError.sourceUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ color: 'var(--ink)', textDecoration: 'underline', wordBreak: 'break-all' }}
+                          >
+                            {teachError.sourceUrl}
+                          </a>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--ink)', minWidth: '80px' }}>Status:</span>
+                        <span>{teachError.statusLabel || 'Extraction incomplete'}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--ink)', minWidth: '80px' }}>Action:</span>
+                        <span>{teachError.message || "We couldn't verify enough information from the official documentation to create a reliable lesson. You can retry or choose another objective."}</span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                      <button
+                        onClick={() => {
+                          const currentObj = objectives[currentIdx];
+                          if (currentObj) loadTeach(currentObj.id, true);
+                        }}
+                        disabled={teachLoading}
+                        style={{
+                          padding: '6px 16px',
+                          background: 'var(--ink)',
+                          color: 'var(--canvas)',
+                          border: 'none',
+                          borderRadius: '4px',
+                          fontSize: '13px',
+                          fontWeight: 500,
+                          cursor: teachLoading ? 'not-allowed' : 'pointer',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        {teachLoading ? '[~] retrying extraction…' : '[~] retry source extraction'}
+                      </button>
+                      {currentIdx < objectives.length - 1 && (
+                        <button
+                          onClick={handleNextObjective}
+                          style={{
+                            padding: '6px 16px',
+                            background: 'transparent',
+                            color: 'var(--ink)',
+                            border: '1px solid var(--hairline-strong)',
+                            borderRadius: '4px',
+                            fontSize: '13px',
+                            cursor: 'pointer',
+                            fontFamily: 'inherit',
+                          }}
+                        >
+                          skip to next objective →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : teachContent ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+                    {/* What it is */}
+                    <div style={{ padding: '20px', background: 'var(--surface-soft)', border: '1px solid var(--hairline)', borderRadius: '4px' }}>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 12px 0' }}>[+] what it is</p>
+                      {Array.isArray(teachContent.what_it_is) ? (
+                        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {teachContent.what_it_is.map((item: string, i: number) => (
+                            <li key={i} style={{ display: 'flex', gap: '10px', fontSize: '14px', color: 'var(--body)', lineHeight: 1.6, alignItems: 'flex-start' }}>
+                              <span style={{ color: 'var(--ink)', fontWeight: 700, flexShrink: 0 }}>•</span>
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p style={{ fontSize: '14px', color: 'var(--body)', lineHeight: 1.6, margin: 0 }}>
+                          {teachContent.what_it_is}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Analogy */}
                     {teachContent.analogy && (
                       <div style={{ padding: '16px 20px', background: 'var(--surface-dark)', color: 'var(--on-dark)', borderRadius: '4px' }}>
                         <p style={{ fontSize: '12px', color: 'var(--ash)', margin: '0 0 6px 0' }}>$ intuition</p>
-                        <p style={{ fontSize: '14px', lineHeight: 1.6, margin: 0 }}>
+                        <p style={{ fontSize: '14px', lineHeight: 1.6, margin: 0, color: 'var(--on-dark)' }}>
                           {teachContent.analogy}
                         </p>
                       </div>
                     )}
 
+                    {/* Why it exists */}
+                    {teachContent.why_it_exists && (
+                      <div style={{ padding: '20px', background: 'var(--surface-soft)', border: '1px solid var(--hairline)', borderRadius: '4px' }}>
+                        <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 12px 0' }}>[~] why it exists</p>
+                        {Array.isArray(teachContent.why_it_exists) ? (
+                          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {teachContent.why_it_exists.map((item: string, i: number) => (
+                              <li key={i} style={{ display: 'flex', gap: '10px', fontSize: '14px', color: 'var(--body)', lineHeight: 1.6, alignItems: 'flex-start' }}>
+                                <span style={{ color: 'var(--ink)', fontWeight: 700, flexShrink: 0 }}>•</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p style={{ fontSize: '14px', color: 'var(--body)', lineHeight: 1.6, margin: 0 }}>
+                            {teachContent.why_it_exists}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* How it works */}
+                    {teachContent.how_it_works && (
+                      <div style={{ padding: '20px', background: 'var(--surface-soft)', border: '1px solid var(--hairline)', borderRadius: '4px' }}>
+                        <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 12px 0' }}>[#] how it works</p>
+                        {Array.isArray(teachContent.how_it_works) ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {teachContent.how_it_works.map((step: string, idx: number) => (
+                              <div key={idx} style={{ display: 'flex', gap: '12px', fontSize: '14px', color: 'var(--body)', lineHeight: 1.6, alignItems: 'flex-start' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ink)', padding: '1px 6px', background: 'var(--canvas)', border: '1px solid var(--hairline-strong)', borderRadius: '3px', flexShrink: 0, marginTop: '2px' }}>
+                                  0{idx + 1}
+                                </span>
+                                <span>{step}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p style={{ fontSize: '14px', color: 'var(--body)', lineHeight: 1.6, margin: 0 }}>
+                            {teachContent.how_it_works}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Key Concepts */}
+                    {teachContent.key_concepts?.length > 0 && (
+                      <div style={{ padding: '20px', background: 'var(--surface-soft)', border: '1px solid var(--hairline)', borderRadius: '4px' }}>
+                        <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 14px 0' }}>[*] key concepts</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          {teachContent.key_concepts.map((kc: any, i: number) => (
+                            <div key={i} style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '16px', alignItems: 'baseline', paddingBottom: '10px', borderBottom: i < teachContent.key_concepts.length - 1 ? '1px dashed var(--hairline)' : 'none' }}>
+                              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', wordBreak: 'break-word' }}>
+                                {kc.term}
+                              </span>
+                              <span style={{ fontSize: '14px', color: 'var(--body)', lineHeight: 1.5 }}>
+                                {kc.definition}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Common Mistakes */}
+                    {teachContent.common_mistakes?.length > 0 && (
+                      <div style={{ padding: '20px', border: '1px solid var(--hairline)', borderRadius: '4px', background: 'var(--canvas)' }}>
+                        <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 10px 0' }}>[-] common misconceptions</p>
+                        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {(Array.isArray(teachContent.common_mistakes) ? teachContent.common_mistakes : [teachContent.common_mistakes]).map((m: string, i: number) => (
+                            <li key={i} style={{ display: 'flex', gap: '10px', fontSize: '14px', color: 'var(--body)', lineHeight: 1.5, alignItems: 'flex-start' }}>
+                              <span style={{ color: 'var(--ink)', fontWeight: 700, flexShrink: 0 }}>×</span>
+                              <span>{m}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Exam Tip */}
                     {teachContent.exam_tip && (
-                      <div style={{ padding: '14px 18px', border: '1px solid var(--hairline-strong)', borderRadius: '4px' }}>
+                      <div style={{ padding: '14px 18px', border: '1px solid var(--hairline-strong)', borderRadius: '4px', background: 'var(--surface-card)' }}>
                         <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 4px 0' }}>[?] key exam point</p>
-                        <p style={{ fontSize: '14px', color: 'var(--body)', margin: 0 }}>{teachContent.exam_tip}</p>
+                        <p style={{ fontSize: '14px', color: 'var(--ink)', margin: 0, lineHeight: 1.5, fontWeight: 500 }}>{teachContent.exam_tip}</p>
                       </div>
                     )}
 
@@ -609,15 +1053,15 @@ function PrepContent() {
                         fontWeight: 600,
                         cursor: 'pointer',
                         fontFamily: 'inherit',
-                        alignSelf: 'flex-start',
-                        marginTop: '12px',
+                        width: '100%',
+                        marginTop: '8px',
                       }}
                     >
-                      I got it — test my understanding →
+                      test understanding now [practice question] →
                     </button>
                   </div>
                 ) : (
-                  <p style={{ color: 'var(--mute)' }}>[-] No content found.</p>
+                  <p style={{ color: 'var(--mute)' }}>[-] No teaching content available.</p>
                 )}
               </div>
             )}
@@ -650,13 +1094,14 @@ function PrepContent() {
 
                     {/* Options */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {question.options?.map((opt: any) => {
-                        const isSelected = selectedAnswer === opt.id;
+                      {question.options?.map((opt: any, idx: number) => {
+                        const optData = getOptionData(opt, idx);
+                        const isSelected = selectedAnswer === optData.id || selectedAnswer === idx || selectedAnswer === optData.text;
                         return (
                           <button
-                            key={opt.id}
+                            key={optData.id || idx}
                             disabled={interleavedStep === 'result'}
-                            onClick={() => setSelectedAnswer(opt.id)}
+                            onClick={() => setSelectedAnswer(optData.id)}
                             style={{
                               padding: '16px 20px',
                               textAlign: 'left',
@@ -672,9 +1117,9 @@ function PrepContent() {
                             }}
                           >
                             <span style={{ fontWeight: 600, marginRight: '8px' }}>
-                              [{opt.id.replace('opt-', '').toUpperCase()}]
+                              [{optData.label}]
                             </span>
-                            {opt.text}
+                            {optData.text}
                           </button>
                         );
                       })}
@@ -767,13 +1212,14 @@ function PrepContent() {
 
                 {/* Question Options */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {question.options?.map((opt: any) => {
-                    const isSelected = selectedAnswer === opt.id;
+                  {question.options?.map((opt: any, idx: number) => {
+                    const optData = getOptionData(opt, idx);
+                    const isSelected = selectedAnswer === optData.id || selectedAnswer === idx || selectedAnswer === optData.text;
                     return (
                       <button
-                        key={opt.id}
+                        key={optData.id || idx}
                         disabled={!!result}
-                        onClick={() => setSelectedAnswer(opt.id)}
+                        onClick={() => setSelectedAnswer(optData.id)}
                         style={{
                           padding: '16px 20px',
                           textAlign: 'left',
@@ -788,9 +1234,9 @@ function PrepContent() {
                         }}
                       >
                         <span style={{ fontWeight: 600, marginRight: '8px' }}>
-                          [{opt.id.replace('opt-', '').toUpperCase()}]
+                          [{optData.label}]
                         </span>
-                        {opt.text}
+                        {optData.text}
                       </button>
                     );
                   })}
@@ -864,6 +1310,41 @@ function PrepContent() {
           </div>
         )}
       </main>
+
+      {/* Update progress floating overlay */}
+      {isUpdating && (
+        <div style={{
+          position: 'fixed',
+          bottom: '32px',
+          right: '32px',
+          width: '420px',
+          background: 'var(--surface-dark)',
+          color: 'var(--on-dark)',
+          padding: '20px 24px',
+          borderRadius: '4px',
+          fontFamily: 'inherit',
+          fontSize: '13px',
+          lineHeight: 1.6,
+          zIndex: 1000,
+          maxHeight: '320px',
+          overflowY: 'auto',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+          border: '1px solid var(--hairline-strong)',
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: '12px', color: 'var(--on-dark)', fontSize: '14px' }}>
+            [~] updating course content
+          </div>
+          {updateLogs.map((log, i) => (
+            <div key={i} style={{
+              marginBottom: '4px',
+              color: log.startsWith('[-]') ? 'var(--danger)' : log.startsWith('[+]') ? 'var(--success)' : log.startsWith('[~]') ? 'var(--warning)' : 'var(--on-dark)',
+            }}>
+              {log}
+            </div>
+          ))}
+          <div style={{ display: 'inline-block', width: '8px', animation: 'blink 1s step-end infinite', color: 'var(--on-dark)' }}>_</div>
+        </div>
+      )}
     </div>
   );
 }
