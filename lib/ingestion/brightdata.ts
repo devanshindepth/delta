@@ -1,5 +1,18 @@
-import { chromium } from "playwright";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import fs from "fs";
+import path from "path";
 import crypto from "crypto";
+import { createGroqJsonCompletion } from "@/lib/groq";
+
+const execFileAsync = promisify(execFile);
+
+function getNpxCommand(): { cmd: string; prependArgs: string[] } {
+  if (process.platform === "win32") {
+    return { cmd: "cmd.exe", prependArgs: ["/c", "npx"] };
+  }
+  return { cmd: "npx", prependArgs: [] };
+}
 
 export interface BrightDataScrapeResult {
   title: string;
@@ -11,6 +24,26 @@ export interface BrightDataScrapeResult {
   links: string[];
 }
 
+export interface ExtractionResult {
+  title: string;
+  summary?: string;
+  learning_outcomes: string[];
+  key_concepts: Array<{ term: string; definition: string }>;
+  api_names: string[];
+  limits: string[];
+  code_examples: string[];
+}
+
+export interface ScrapeStatus {
+  path: "primary" | "fallback";
+  source_confidence: "official_blueprint" | "provider_derived" | "fallback_discovered";
+  healed: boolean;
+  outcome: "valid" | "invalid" | "failed";
+  source_url: string;
+  failure_reason?: string;
+  missing_fields_recovered?: string;
+}
+
 export interface ObjectiveScrapeResult {
   sources: Array<{
     url: string;
@@ -19,300 +52,679 @@ export interface ObjectiveScrapeResult {
   }>;
   combinedContent: string;
   scrapeMethod: string;
+  scrape_status: ScrapeStatus;
+  extraction_result?: ExtractionResult;
 }
 
-/**
- * Checks whether Bright Data credentials are configured in the environment.
- */
-export function isBrightDataConfigured(): boolean {
-  const ws = process.env.BRIGHT_DATA_WS_ENDPOINT;
-  const apiKey = process.env.BRIGHT_DATA_API_KEY;
-  return Boolean(
-    (ws && ws.trim() !== "" && !ws.includes("dummy")) ||
-    (apiKey && apiKey.trim() !== "" && !apiKey.includes("your_bright_data_api_key"))
-  );
+export interface ValidationResult {
+  is_valid: boolean;
+  missing_fields: string;
 }
 
-/**
- * Bright Data Web Scraper — EXCLUSIVE scraper.
- * Communicates with Bright Data Scraping Browser via CDP (Chrome DevTools Protocol)
- * or Bright Data Web Unlocker / Scraping API.
- * 
- * ZERO non-BrightData fallback is permitted.
- */
-export async function scrapeWithBrightData(url: string): Promise<BrightDataScrapeResult> {
-  const wsEndpoint = process.env.BRIGHT_DATA_WS_ENDPOINT;
-  const apiKey = process.env.BRIGHT_DATA_API_KEY;
-
-  if (!isBrightDataConfigured()) {
-    throw new Error(
-      "Bright Data is not configured. Please set BRIGHT_DATA_WS_ENDPOINT (Bright Data Scraping Browser WebSocket) or BRIGHT_DATA_API_KEY in your .env.local file. As per project specification, only Bright Data scraping is enabled."
-    );
-  }
-
-  // Strategy 1: Bright Data Scraping Browser via Playwright CDP
-  if (wsEndpoint && wsEndpoint.trim() !== "") {
-    let browser: any = null;
-    let timeoutId: NodeJS.Timeout | null = null;
-
-    try {
-      const scrapePromise = (async () => {
-        console.info(`[brightdata] connecting to Scraping Browser for: ${url}`);
-        browser = await chromium.connectOverCDP(wsEndpoint);
-        const context = browser.contexts()[0] || (await browser.newContext());
-        const page = await context.newPage();
-
-        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
-
-        const title = (await page.title()) || "Untitled Document";
-
-        // Extract structured text and clean unnecessary artifacts
-        const pageData = await page.evaluate(() => {
-          const scripts = document.querySelectorAll("script, style, nav, footer, noscript, iframe");
-          scripts.forEach((el) => el.remove());
-
-          const headings = Array.from(document.querySelectorAll("h1, h2, h3, h4"))
-            .map((h) => (h.textContent || "").trim())
-            .filter(Boolean);
-
-          const links = Array.from(document.querySelectorAll("a[href]"))
-            .map((a) => (a as HTMLAnchorElement).href)
-            .filter((h) => h.startsWith("http"));
-
-          const bodyText = document.body ? document.body.innerText.replace(/\s+/g, " ").trim() : "";
-
-          return {
-            bodyText,
-            headings,
-            links: Array.from(new Set(links)).slice(0, 50)
-          };
-        });
-
-        const hash = crypto.createHash("sha256").update(pageData.bodyText).digest("hex");
-
-        return {
-          title,
-          url,
-          rawContent: pageData.bodyText,
-          contentHash: `sha256:${hash}`,
-          retrievedAt: new Date().toISOString(),
-          headings: pageData.headings,
-          links: pageData.links
-        };
-      })();
-
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          reject(new Error("Bright Data Scraping Browser CDP session timed out after 45s."));
-        }, 45000);
-      });
-
-      return await Promise.race([scrapePromise, timeoutPromise]);
-    } finally {
-      if (timeoutId) clearTimeout(timeoutId);
-      if (browser) {
-        try {
-          await browser.close();
-        } catch {
-          // ignore close error
-        }
-      }
-    }
-  }
-
-  // Strategy 2: Bright Data Web Unlocker / Scraping API via HTTPS Request
-  if (apiKey && apiKey.trim() !== "") {
-    console.info(`[brightdata] calling Bright Data Web Unlocker API for: ${url}`);
-    const endpoint = "https://api.brightdata.com/request";
-    
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        url,
-        format: "raw",
-        zone: process.env.BRIGHT_DATA_ZONE || "unblocker"
-      })
-    });
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "");
-      throw new Error(`Bright Data Scraping API returned status ${res.status}: ${errText}`);
-    }
-
-    const html = await res.text();
-    // Clean and extract basic text
-    const cleanText = html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-    const hash = crypto.createHash("sha256").update(cleanText).digest("hex");
-
-    return {
-      title: `Scraped Document: ${new URL(url).hostname}`,
-      url,
-      rawContent: cleanText,
-      contentHash: `sha256:${hash}`,
-      retrievedAt: new Date().toISOString(),
-      headings: [],
-      links: []
-    };
-  }
-
-  throw new Error("No valid Bright Data scraping endpoint configured.");
-}
-
-/**
- * Build a list of candidate documentation URLs for a given certification objective.
- * Prioritises official vendor docs over generic searches.
- */
-function buildDocUrls(objective: {
-  title: string;
-  description?: string;
-  certification_id?: string;
-  domain_title?: string;
-}): string[] {
-  const title = objective.title || "";
-  const certId = (objective.certification_id || "").toLowerCase();
-  const encoded = encodeURIComponent(`${title} ${objective.domain_title || ""} documentation`);
-
-  const urls: string[] = [];
-
-  // Provider-specific doc roots
-  if (certId.includes("azure") || certId.includes("az-") || certId.includes("ai-") || certId.includes("ms-")) {
-    urls.push(`https://learn.microsoft.com/en-us/search/?terms=${encodeURIComponent(title)}&category=Documentation`);
-    urls.push(`https://learn.microsoft.com/en-us/azure/`);
-  } else if (certId.includes("aws") || certId.includes("saa") || certId.includes("amazon")) {
-    urls.push(`https://docs.aws.amazon.com/index.html`);
-    urls.push(`https://aws.amazon.com/search/?searchQuery=${encodeURIComponent(title)}`);
-  } else if (certId.includes("gcp") || certId.includes("google") || certId.includes("gce")) {
-    urls.push(`https://cloud.google.com/docs`);
-    urls.push(`https://cloud.google.com/docs/search?q=${encodeURIComponent(title)}`);
-  } else if (certId.includes("cka") || certId.includes("kubernetes") || certId.includes("k8s")) {
-    urls.push(`https://kubernetes.io/docs/search/?q=${encodeURIComponent(title)}`);
-  }
-
-  // Fallback: Bing search (reliably returns HTML with relevant excerpts)
-  urls.push(`https://www.bing.com/search?q=${encoded}+site:docs.microsoft.com+OR+site:docs.aws.amazon.com+OR+site:cloud.google.com+OR+site:kubernetes.io`);
-  urls.push(`https://www.bing.com/search?q=${encoded}`);
-
-  return urls;
-}
-
-/**
- * Scrape real course/documentation content for a certification objective using
- * Bright Data Web Unlocker. Returns extracted text from the best available source.
- *
- * Falls back gracefully when Bright Data is not configured.
- */
-export async function scrapeObjectiveContent(objective: {
+export interface ScrapeObjectiveInput {
   id?: string;
   title: string;
   description?: string;
   certification_id?: string;
   domain_title?: string;
   objective_code?: string;
-}): Promise<ObjectiveScrapeResult> {
+  cert_title?: string;
+  cert_provider?: string;
+  skills?: Array<{ official_doc_url?: string; [key: string]: unknown }>;
+}
+
+export function isBrightDataConfigured(): boolean {
   const apiKey = process.env.BRIGHT_DATA_API_KEY;
-  const zone = process.env.BRIGHT_DATA_ZONE || "web_unlocker1";
+  return Boolean(
+    apiKey &&
+      apiKey.trim() !== "" &&
+      !apiKey.includes("your_bright_data_api_key")
+  );
+}
 
-  const fallbackResult: ObjectiveScrapeResult = {
-    sources: [],
-    combinedContent: "",
-    scrapeMethod: "none",
-  };
+const SCRAPERS_FILE = path.join(process.cwd(), ".bdata-scrapers.json");
 
-  if (!apiKey || apiKey.trim() === "" || apiKey.includes("your_bright_data_api_key")) {
-    console.info("[brightdata] API key not configured — skipping objective scrape");
-    return fallbackResult;
-  }
-
-  const candidateUrls = buildDocUrls(objective);
-  const sources: Array<{ url: string; title: string; content: string }> = [];
-
-  // Try up to 2 URLs — we want real content, not just a search results page
-  for (const url of candidateUrls.slice(0, 3)) {
-    if (sources.length >= 2) break;
-
+function getCollectorId(hostname: string, type: string): string | null {
+  if (fs.existsSync(SCRAPERS_FILE)) {
     try {
-      console.info(`[brightdata] scraping objective content from: ${url}`);
+      const data = JSON.parse(fs.readFileSync(SCRAPERS_FILE, "utf-8"));
+      return data[hostname]?.[type] || null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
 
-      const res = await fetch("https://api.brightdata.com/request", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          url,
-          zone,
-          format: "raw",
-        }),
-        signal: AbortSignal.timeout(30_000),
-      });
+function saveCollectorId(hostname: string, type: string, collectorId: string) {
+  let data: Record<string, Record<string, string>> = {};
+  if (fs.existsSync(SCRAPERS_FILE)) {
+    try {
+      data = JSON.parse(fs.readFileSync(SCRAPERS_FILE, "utf-8"));
+    } catch {
+      data = {};
+    }
+  }
+  if (!data[hostname]) data[hostname] = {};
+  data[hostname][type] = collectorId;
+  fs.writeFileSync(SCRAPERS_FILE, JSON.stringify(data, null, 2));
+}
 
-      if (!res.ok) {
-        console.warn(`[brightdata] Web Unlocker returned ${res.status} for ${url}`);
-        continue;
+async function runBDataCli(
+  args: string[],
+  timeoutMs: number = 180_000
+): Promise<string> {
+  const apiKey = process.env.BRIGHT_DATA_API_KEY || process.env.BRIGHTDATA_API_KEY || "";
+  const { cmd, prependArgs } = getNpxCommand();
+
+  const fullArgs = [
+    ...prependArgs,
+    "-y",
+    "-p",
+    "@brightdata/cli",
+    "bdata",
+    "--api-key",
+    apiKey,
+    ...args,
+  ];
+
+  console.info(`[bdata-studio] Running: bdata ${args.slice(0, 2).join(" ")}`);
+
+  try {
+    const { stdout } = await execFileAsync(cmd, fullArgs, {
+      encoding: "utf-8",
+      maxBuffer: 1024 * 1024 * 10,
+      timeout: timeoutMs,
+      env: {
+        ...process.env,
+        BRIGHTDATA_API_KEY: apiKey,
+        BRIGHT_DATA_API_KEY: apiKey,
+      },
+    });
+    return stdout;
+  } catch (err: any) {
+    const msg = err?.stderr
+      ? String(err.stderr).substring(0, 300)
+      : err?.message || "unknown CLI error";
+    throw new Error(`[bdata-studio] CLI failed: ${msg}`);
+  }
+}
+
+export const OFFICIAL_DOMAINS = [
+  "learn.microsoft.com",
+  "docs.microsoft.com",
+  "docs.aws.amazon.com",
+  "cloud.google.com",
+  "docs.azure.com",
+  "docs.databricks.com",
+  "docs.snowflake.com",
+  "docs.oracle.com",
+  "developer.hashicorp.com",
+  "kubernetes.io",
+  "docs.docker.com",
+  "docs.github.com",
+  "developer.salesforce.com",
+  "docs.confluent.io",
+  "docs.redhat.com",
+];
+
+export function resolveOfficialUrl(
+  objective: ScrapeObjectiveInput
+): { url: string; source_confidence: "official_blueprint" | "provider_derived" } | null {
+  if (objective.skills && objective.skills.length > 0) {
+    for (const skill of objective.skills) {
+      if (skill.official_doc_url) {
+        try {
+          const url = new URL(skill.official_doc_url);
+          if (OFFICIAL_DOMAINS.includes(url.hostname)) {
+            return {
+              url: skill.official_doc_url,
+              source_confidence: "official_blueprint",
+            };
+          }
+        } catch (e) {
+          // Ignore invalid URLs
+        }
       }
-
-      const html = await res.text();
-      if (!html || html.length < 200) continue;
-
-      // Extract meaningful text — strip scripts, styles, nav chrome
-      const cleanText = html
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
-        .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, " ")
-        .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, " ")
-        .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, " ")
-        .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, " ")
-        .replace(/<!--[\s\S]*?-->/g, " ")
-        .replace(/<[^>]+>/g, " ")
-        .replace(/&nbsp;/g, " ")
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/\s{3,}/g, "\n\n")
-        .trim();
-
-      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-      const title = titleMatch ? titleMatch[1].trim() : new URL(url).hostname;
-
-      // Only keep pages that seem to contain relevant content
-      const lowerText = cleanText.toLowerCase();
-      const objTitleWords = objective.title.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
-      const relevantWordCount = objTitleWords.filter((w) => lowerText.includes(w)).length;
-
-      // Accept if at least half the key words from the objective appear on the page
-      if (relevantWordCount >= Math.ceil(objTitleWords.length * 0.4)) {
-        sources.push({
-          url,
-          title,
-          // Cap content per source to avoid flooding the LLM context
-          content: cleanText.substring(0, 6000),
-        });
-        console.info(`[brightdata] accepted content from ${url} (${relevantWordCount}/${objTitleWords.length} key terms matched)`);
-      } else {
-        console.info(`[brightdata] skipped low-relevance page ${url} (${relevantWordCount}/${objTitleWords.length} key terms)`);
-      }
-    } catch (err: any) {
-      console.warn(`[brightdata] failed to scrape ${url}: ${err?.message}`);
     }
   }
 
-  if (sources.length === 0) {
-    return fallbackResult;
+  const derived = deriveUrlFromProvider(objective.cert_provider, objective.title);
+  if (derived) {
+    return { url: derived, source_confidence: "provider_derived" };
   }
 
-  const combinedContent = sources
-    .map((s) => `## Source: ${s.title}\nURL: ${s.url}\n\n${s.content}`)
-    .join("\n\n---\n\n");
+  return null;
+}
+
+export function deriveUrlFromProvider(
+  provider: string | undefined,
+  objectiveTitle: string
+): string | null {
+  if (!provider) return null;
+  const lowerProvider = provider.toLowerCase();
+  
+  let domain = "";
+  if (lowerProvider.includes("microsoft")) domain = "learn.microsoft.com";
+  else if (lowerProvider.includes("aws")) domain = "docs.aws.amazon.com";
+  else if (lowerProvider.includes("gcp") || lowerProvider.includes("google")) domain = "cloud.google.com";
+  else if (lowerProvider.includes("hashicorp")) domain = "developer.hashicorp.com";
+  else if (lowerProvider.includes("docker")) domain = "docs.docker.com";
+  else return null;
+
+  const slug = objectiveTitle.toLowerCase().replace(/ /g, "+");
+  return `https://${domain}/search?q=${slug}`;
+}
+
+function buildMissingFieldsDescription(data: Partial<ExtractionResult>, sourceUrl?: string): string {
+  const missing: string[] = [];
+  if (!data.title || typeof data.title !== "string" || !data.title.trim()) {
+    missing.push("title");
+  }
+  const hasSummary = typeof data.summary === "string" && data.summary.trim().length > 0;
+  const hasOutcomes = Array.isArray(data.learning_outcomes) && data.learning_outcomes.some(o => typeof o === "string" && o.trim().length > 0);
+  if (!hasSummary && !hasOutcomes) {
+    missing.push("summary or learning_outcomes");
+  }
+  const validConcepts = Array.isArray(data.key_concepts) && data.key_concepts.filter(
+    kc => kc && typeof kc.term === "string" && kc.term.trim().length > 0 && typeof kc.definition === "string" && kc.definition.trim().length > 0
+  );
+  if (!validConcepts || validConcepts.length < 1) {
+    missing.push("key_concepts with term and definition");
+  }
+  if (sourceUrl !== undefined && (!sourceUrl || typeof sourceUrl !== "string" || !sourceUrl.trim())) {
+    missing.push("valid source URL");
+  }
+  return missing.join(", ");
+}
+
+export function validateExtractionResult(data: unknown, sourceUrl?: string): ValidationResult {
+  if (!data || typeof data !== "object") {
+    return { is_valid: false, missing_fields: "could not parse extraction result" };
+  }
+
+  const result = data as Partial<ExtractionResult>;
+  const hasTitle = typeof result.title === "string" && result.title.trim().length > 0;
+  const hasSummary = typeof result.summary === "string" && result.summary.trim().length > 0;
+  const hasOutcomes = Array.isArray(result.learning_outcomes) && result.learning_outcomes.some(o => typeof o === "string" && o.trim().length > 0);
+  
+  const validConcepts = Array.isArray(result.key_concepts) && result.key_concepts.filter(
+    kc => kc && typeof kc.term === "string" && kc.term.trim().length > 0 && typeof kc.definition === "string" && kc.definition.trim().length > 0
+  );
+  const hasConcepts = Boolean(validConcepts && validConcepts.length >= 1);
+  const hasSourceUrl = sourceUrl === undefined || (typeof sourceUrl === "string" && sourceUrl.trim().length > 0);
+
+  const is_valid = Boolean(hasTitle && (hasSummary || hasOutcomes) && hasConcepts && hasSourceUrl);
 
   return {
-    sources,
-    combinedContent,
-    scrapeMethod: "brightdata-web-unlocker",
+    is_valid,
+    missing_fields: is_valid ? "" : buildMissingFieldsDescription(result, sourceUrl),
   };
+}
+
+export function buildDocContentPrompt(objectiveTitle: string): string {
+  return `Extract the following documentation page content as a JSON object strictly matching this canonical schema:
+{
+  "title": "exact title of the documentation page",
+  "summary": "2-3 sentence clear technical summary of what this document covers",
+  "learning_outcomes": ["specific technical abilities, tasks, or concepts learned from this page"],
+  "key_concepts": [
+    { "term": "technical term, component, or concept name", "definition": "concise, accurate one-sentence definition directly from the text" }
+  ],
+  "api_names": ["SDK classes, methods, REST endpoints, or CLI commands mentioned"],
+  "limits": ["quotas, constraints, size limits, regional limitations, or pricing tier restrictions"],
+  "code_examples": ["verbatim code snippets or CLI examples from the page"]
+}
+Ensure key_concepts contains all core terms and definitions described in the page. Return ONLY this valid JSON object.`;
+}
+
+export function normalizeExtractionResult(raw: any): ExtractionResult {
+  if (!raw || typeof raw !== "object") {
+    return {
+      title: "",
+      summary: "",
+      learning_outcomes: [],
+      key_concepts: [],
+      api_names: [],
+      limits: [],
+      code_examples: [],
+    };
+  }
+
+  // 1. Canonical Fields & Safe Semantic Aliases
+  const title = typeof raw.title === "string" && raw.title.trim()
+    ? raw.title.trim()
+    : typeof raw.page_title === "string" && raw.page_title.trim()
+    ? raw.page_title.trim()
+    : typeof raw.name === "string" && raw.name.trim()
+    ? raw.name.trim()
+    : "";
+
+  const summary = typeof raw.summary === "string" && raw.summary.trim()
+    ? raw.summary.trim()
+    : typeof raw.overview === "string" && raw.overview.trim()
+    ? raw.overview.trim()
+    : typeof raw.description === "string" && raw.description.trim()
+    ? raw.description.trim()
+    : "";
+
+  // 2. Learning Outcomes
+  const learning_outcomes: string[] = [];
+  if (Array.isArray(raw.learning_outcomes)) {
+    for (const item of raw.learning_outcomes) {
+      if (typeof item === "string" && item.trim()) learning_outcomes.push(item.trim());
+    }
+  } else if (Array.isArray(raw.learning_objectives)) {
+    for (const item of raw.learning_objectives) {
+      if (typeof item === "string" && item.trim()) learning_outcomes.push(item.trim());
+    }
+  } else if (Array.isArray(raw.outcomes)) {
+    for (const item of raw.outcomes) {
+      if (typeof item === "string" && item.trim()) learning_outcomes.push(item.trim());
+    }
+  }
+
+  if (learning_outcomes.length === 0) {
+    if (typeof raw.introduction === "string" && raw.introduction.trim()) {
+      learning_outcomes.push(raw.introduction.trim());
+    }
+    if (typeof raw.prerequisites === "string" && raw.prerequisites.trim()) {
+      learning_outcomes.push(raw.prerequisites.trim());
+    }
+  }
+
+  // 3. Key Concepts
+  let key_concepts: Array<{ term: string; definition: string }> = [];
+  if (Array.isArray(raw.key_concepts)) {
+    for (const kc of raw.key_concepts) {
+      if (kc && typeof kc === "object") {
+        const term = String(kc.term || kc.name || kc.concept || "").trim();
+        const definition = String(kc.definition || kc.description || kc.meaning || kc.summary || "").trim();
+        if (term && definition) {
+          key_concepts.push({ term, definition });
+        }
+      }
+    }
+  }
+
+  // If key_concepts is empty, inspect semantic collections: topics, concepts, components, definitions
+  if (key_concepts.length === 0) {
+    const candidateList = Array.isArray(raw.topics)
+      ? raw.topics
+      : Array.isArray(raw.concepts)
+      ? raw.concepts
+      : Array.isArray(raw.components)
+      ? raw.components
+      : Array.isArray(raw.definitions)
+      ? raw.definitions
+      : Array.isArray(raw.key_topics)
+      ? raw.key_topics
+      : null;
+
+    if (candidateList && candidateList.length > 0) {
+      for (const item of candidateList) {
+        if (typeof item === "string" && item.trim()) {
+          key_concepts.push({
+            term: item.trim(),
+            definition: `Core technical topic described in ${title || "the documentation"}.`,
+          });
+        } else if (item && typeof item === "object") {
+          const term = String(item.topic_title || item.title || item.name || item.term || "").trim();
+          const definition = String(item.description || item.summary || item.definition || `Technical concept covered in ${title || "documentation"}.`).trim();
+          if (term) {
+            key_concepts.push({ term, definition });
+          }
+        }
+      }
+    }
+  }
+
+  // If still empty, parse HTML tables or headings from raw.content if present
+  if (key_concepts.length === 0 && raw.content) {
+    const content = String(raw.content);
+
+    // Parse HTML table rows
+    const tableRowRegex = /<tr>\s*<td>(?:<[^>]+>)*\s*([^<]+?)\s*(?:<\/[^>]+>)*<\/td>\s*<td>\s*([^<]+?)\s*<\/td>/gi;
+    let match;
+    while ((match = tableRowRegex.exec(content)) !== null) {
+      const term = match[1].replace(/<[^>]+>/g, "").trim();
+      const definition = match[2].replace(/<[^>]+>/g, "").trim();
+      if (term && definition && term.toLowerCase() !== "service" && term.toLowerCase() !== "role") {
+        key_concepts.push({ term, definition });
+      }
+    }
+
+    // Parse <h2> or <h3> headings
+    if (key_concepts.length === 0) {
+      const headingRegex = /<h[23][^>]*>(.*?)<\/h[23]>/gi;
+      while ((match = headingRegex.exec(content)) !== null) {
+        const term = match[1].replace(/<[^>]+>/g, "").trim();
+        if (term && term.length > 2) {
+          key_concepts.push({
+            term,
+            definition: `Core architectural component covered in ${title || "documentation"}.`,
+          });
+        }
+      }
+    }
+  }
+
+  // Fallback: If still empty, synthesize from title and summary/description
+  if (key_concepts.length === 0 && title) {
+    key_concepts.push({
+      term: title,
+      definition: summary || `Official documentation concept for ${title}.`,
+    });
+  }
+
+  // 4. Optional Fields (do not fail extraction if absent)
+  const api_names: string[] = [];
+  const rawApis = Array.isArray(raw.api_names) ? raw.api_names : (Array.isArray(raw.apis) ? raw.apis : (Array.isArray(raw.cli_commands) ? raw.cli_commands : []));
+  for (const item of rawApis) {
+    if (typeof item === "string" && item.trim()) api_names.push(item.trim());
+  }
+
+  const limits: string[] = [];
+  const rawLimits = Array.isArray(raw.limits) ? raw.limits : (Array.isArray(raw.quotas) ? raw.quotas : (Array.isArray(raw.constraints) ? raw.constraints : []));
+  for (const item of rawLimits) {
+    if (typeof item === "string" && item.trim()) limits.push(item.trim());
+  }
+
+  const code_examples: string[] = [];
+  const rawCode = Array.isArray(raw.code_examples) ? raw.code_examples : (Array.isArray(raw.code_samples) ? raw.code_samples : (Array.isArray(raw.snippets) ? raw.snippets : []));
+  for (const item of rawCode) {
+    if (typeof item === "string" && item.trim()) code_examples.push(item.trim());
+  }
+
+  return {
+    title,
+    summary,
+    learning_outcomes,
+    key_concepts,
+    api_names,
+    limits,
+    code_examples,
+  };
+}
+
+async function scrapeDocUrl(url: string, objectiveTitle: string): Promise<ExtractionResult> {
+  const hostname = new URL(url).hostname;
+  let collectorId = getCollectorId(hostname, "doc_content");
+
+  if (!collectorId) {
+    const prompt = buildDocContentPrompt(objectiveTitle);
+    const out = await runBDataCli(["scraper", "create", url, prompt, "--json"], 420_000);
+    let res: any;
+    try {
+      res = JSON.parse(out);
+    } catch {
+      throw new Error(`scraper_run_failed`);
+    }
+    collectorId = res.collector_id;
+    if (!collectorId) throw new Error(`scraper_run_failed`);
+    
+    try {
+      saveCollectorId(hostname, "doc_content", collectorId);
+    } catch (e) {
+      console.warn(`[bdata-studio] Failed to save collector ID:`, e);
+    }
+  }
+
+  const runOut = await runBDataCli(["scraper", "run", collectorId, url, "--json"], 120_000);
+  let scrapeData: any;
+  try {
+    scrapeData = JSON.parse(runOut);
+    if (Array.isArray(scrapeData)) {
+      scrapeData = scrapeData[0] || {};
+    }
+  } catch {
+    throw new Error(`scraper_run_failed`);
+  }
+  return normalizeExtractionResult(scrapeData);
+}
+
+export async function scrapeObjectiveContent(
+  objective: ScrapeObjectiveInput
+): Promise<ObjectiveScrapeResult> {
+  if (!isBrightDataConfigured()) {
+    throw new Error("Bright Data is not configured.");
+  }
+
+  let scrape_status: ScrapeStatus = {
+    path: "primary",
+    source_confidence: "official_blueprint",
+    healed: false,
+    outcome: "failed",
+    source_url: "",
+  };
+  
+  let extractionResult: ExtractionResult | undefined;
+  let scrapeMethod = "";
+  let healAttempted = false;
+
+  try {
+    const resolved = resolveOfficialUrl(objective);
+    
+    if (resolved) {
+      scrape_status.path = "primary";
+      scrape_status.source_confidence = resolved.source_confidence;
+      scrape_status.source_url = resolved.url;
+      scrapeMethod = "brightdata-scraper-studio-primary";
+      
+      try {
+        extractionResult = await scrapeDocUrl(resolved.url, objective.title);
+      } catch (err: any) {
+        scrape_status.outcome = "failed";
+        scrape_status.failure_reason = "scraper_run_failed";
+        return {
+          sources: [],
+          combinedContent: "",
+          scrapeMethod,
+          scrape_status
+        };
+      }
+    } else {
+      // Fallback Path
+      scrape_status.path = "fallback";
+      scrape_status.source_confidence = "fallback_discovered";
+      scrapeMethod = "brightdata-scraper-studio-fallback";
+      
+      const certLabel = objective.cert_title
+        ? `${objective.cert_title}${objective.cert_provider ? ` (${objective.cert_provider})` : ""}`
+        : objective.certification_id
+        ? objective.certification_id.replace(/^cert-/, "").replace(/-/g, " ")
+        : "certification";
+
+      const searchQuery = encodeURIComponent(`${objective.title} ${certLabel} official documentation`);
+      const searchUrl = `https://www.bing.com/search?q=${searchQuery}`;
+      
+      let searchJson = "";
+      try {
+        let bingCollectorId = getCollectorId("www.bing.com", "documentation_search");
+        if (!bingCollectorId) {
+           bingCollectorId = "c_mt10dg5i258f47a685";
+           saveCollectorId("www.bing.com", "documentation_search", bingCollectorId);
+        }
+        searchJson = await runBDataCli(["scraper", "run", bingCollectorId, searchUrl, "--json"], 120_000);
+      } catch (err: any) {
+        scrape_status.outcome = "failed";
+        scrape_status.failure_reason = "fallback_invocation_failed";
+        return { sources: [], combinedContent: "", scrapeMethod, scrape_status };
+      }
+
+      let docUrl = "";
+      try {
+        const parsed = JSON.parse(searchJson);
+        const results: any[] = Array.isArray(parsed) ? parsed : parsed.results || parsed.items || parsed.data || [];
+        for (const r of results) {
+          const url: string = r?.url || r?.link || r?.href || "";
+          if (url && OFFICIAL_DOMAINS.some(d => url.includes(d))) {
+            docUrl = url;
+            break;
+          }
+        }
+      } catch (e) {
+        // parsing failed
+      }
+
+      if (!docUrl) {
+        scrape_status.outcome = "failed";
+        scrape_status.failure_reason = "no_official_url_found";
+        return { sources: [], combinedContent: "", scrapeMethod, scrape_status };
+      }
+
+      scrape_status.source_url = docUrl;
+
+      try {
+        extractionResult = await scrapeDocUrl(docUrl, objective.title);
+      } catch (err: any) {
+        scrape_status.outcome = "failed";
+        scrape_status.failure_reason = "scraper_run_failed";
+        return { sources: [], combinedContent: "", scrapeMethod, scrape_status };
+      }
+    }
+
+    // Validation Gate
+    let validation = validateExtractionResult(extractionResult, scrape_status.source_url);
+    if (validation.is_valid) {
+      scrape_status.outcome = "valid";
+    } else {
+      if (!healAttempted) {
+        healAttempted = true;
+        const hostname = new URL(scrape_status.source_url).hostname;
+        const collectorId = getCollectorId(hostname, "doc_content");
+        if (collectorId) {
+          try {
+            const healPrompt = `Please also extract: ${validation.missing_fields}`;
+            await runBDataCli(["scraper", "heal", collectorId, healPrompt, "--json"], 120_000);
+            await runBDataCli(["scraper", "approve", collectorId, "--json"], 60_000);
+            const runOut = await runBDataCli(["scraper", "run", collectorId, scrape_status.source_url, "--json"], 120_000);
+            let rawHealedData = JSON.parse(runOut);
+            if (Array.isArray(rawHealedData)) {
+              rawHealedData = rawHealedData[0] || {};
+            }
+            const healedData = normalizeExtractionResult(rawHealedData);
+            
+            const validation2 = validateExtractionResult(healedData, scrape_status.source_url);
+            if (validation2.is_valid) {
+              extractionResult = healedData as ExtractionResult;
+              scrape_status.healed = true;
+              scrape_status.outcome = "valid";
+              scrape_status.missing_fields_recovered = validation.missing_fields;
+            } else {
+              scrape_status.outcome = "failed";
+              scrape_status.failure_reason = "validation_failed_after_heal";
+              return { sources: [], combinedContent: "", scrapeMethod, scrape_status };
+            }
+          } catch (e) {
+            scrape_status.outcome = "failed";
+            scrape_status.failure_reason = "validation_failed_after_heal";
+            return { sources: [], combinedContent: "", scrapeMethod, scrape_status };
+          }
+        } else {
+            scrape_status.outcome = "failed";
+            scrape_status.failure_reason = "validation_failed_after_heal";
+            return { sources: [], combinedContent: "", scrapeMethod, scrape_status };
+        }
+      }
+    }
+
+    const combinedContent = extractionResult ? JSON.stringify(extractionResult) : "";
+    return {
+      sources: [
+        {
+          url: scrape_status.source_url,
+          title: `Official documentation: ${objective.title}`,
+          content: combinedContent,
+        },
+      ],
+      combinedContent,
+      scrapeMethod,
+      scrape_status,
+      extraction_result: extractionResult
+    };
+
+  } catch (err: any) {
+    // Unexpected error
+    throw err;
+  }
+}
+
+export async function scrapeWithBrightData(
+  url: string
+): Promise<BrightDataScrapeResult> {
+  const prompt =
+    "Extract the full exam guide content: domain names, objective codes, topic descriptions, skill areas, and any percentages or weightings. Return all text content in a structured format.";
+    
+  if (!isBrightDataConfigured()) {
+    throw new Error("Bright Data is not configured.");
+  }
+
+  const hostname = new URL(url).hostname;
+  let collectorId = getCollectorId(hostname, "syllabus");
+
+  if (!collectorId) {
+    const out = await runBDataCli(["scraper", "create", url, prompt, "--json"], 180_000);
+    const res = JSON.parse(out);
+    collectorId = res.collector_id;
+    if (collectorId) saveCollectorId(hostname, "syllabus", collectorId);
+  }
+
+  const runOut = await runBDataCli(["scraper", "run", collectorId!, url, "--json"], 120_000);
+  const scrapeData = JSON.parse(runOut);
+  const stringifiedData = JSON.stringify(scrapeData, null, 2);
+
+  const cleanContent = await _legacyExtractCleanContent(stringifiedData, `exam guide for ${hostname}`);
+  
+  const hash = crypto.createHash("sha256").update(cleanContent).digest("hex");
+
+  return {
+    title: `Scraped Document: ${hostname}`,
+    url,
+    rawContent: cleanContent,
+    contentHash: `sha256:${hash}`,
+    retrievedAt: new Date().toISOString(),
+    headings: [],
+    links: [],
+  };
+}
+
+async function _legacyExtractCleanContent(
+  rawJson: string,
+  context: string
+): Promise<string> {
+  const trimmed = rawJson.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+    return trimmed.substring(0, 12000);
+  }
+  const extractPrompt = `
+You are extracting clean technical content from raw JSON scraped from a documentation page.
+The content is related to: ${context}
+Raw scraped JSON (may be partially truncated):
+---
+${rawJson.substring(0, 8000)}
+---
+Extract ALL meaningful technical information and return it as a clean JSON object:
+{
+  "page_title": "the page or document title",
+  "summary": "2-3 sentence summary of what this page covers",
+  "key_topics": ["list of main topics or services mentioned"],
+  "technical_details": "Detailed prose with all technical specifics: service names, API names, config options, limits, features, pricing tiers, region availability, integration patterns — anything an exam might test. 300-600 words.",
+  "important_notes": ["any deprecation notices, important caveats, or breaking changes mentioned"],
+  "code_examples_present": boolean
+}
+  `.trim();
+  try {
+    const result = await createGroqJsonCompletion(extractPrompt);
+    if (!result?.technical_details) return rawJson.substring(0, 12000);
+    const parts: string[] = [];
+    if (result.page_title) parts.push(`# ${result.page_title}`);
+    if (result.summary) parts.push(result.summary);
+    if (result.key_topics?.length) parts.push(`Key topics: ${result.key_topics.join(", ")}`);
+    if (result.technical_details) parts.push(result.technical_details);
+    if (result.important_notes?.length) parts.push(`Important notes:\n${result.important_notes.join("\n")}`);
+    return parts.join("\n\n");
+  } catch {
+    return rawJson.substring(0, 12000);
+  }
 }
