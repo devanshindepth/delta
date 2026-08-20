@@ -54,7 +54,8 @@ export async function POST(request: NextRequest) {
       scrapeMethod = "brightdata";
       console.log(`[generate] Scraped ${scrapedText.length} chars from official URL`);
     } catch (err: any) {
-      console.warn(`[generate] Bright Data scrape failed: ${err.message}. Falling back to LLM knowledge only.`);
+      // Non-fatal: fall through to LLM-only syllabus generation
+      console.warn(`[generate] Bright Data scrape failed: ${err.message}. Generating from LLM training knowledge.`);
     }
 
     // 4. Generate syllabus grounded in scraped content

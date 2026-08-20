@@ -1,159 +1,312 @@
 import { NextResponse } from "next/server";
-import { getObjectiveById, saveScrapedSource } from "@/lib/db/queries";
+import {
+  getObjectiveById,
+  getCertificationById,
+  saveScrapedSource,
+  getRecentScrapedSourceForObjective,
+} from "@/lib/db/queries";
 import { isGroqConfigured, createGroqJsonCompletion } from "@/lib/groq";
-import { scrapeObjectiveContent, isBrightDataConfigured } from "@/lib/ingestion/brightdata";
+import {
+  scrapeObjectiveContent,
+  isBrightDataConfigured,
+  ExtractionResult,
+} from "@/lib/ingestion/brightdata";
 import crypto from "crypto";
 
-// In-memory cache to avoid re-generating identical content
-const cache = new Map<string, any>();
+export const maxDuration = 300;
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await context.params;
 
-    if (cache.has(id)) {
-      return NextResponse.json({ success: true, data: cache.get(id) });
-    }
-
     const objective = getObjectiveById(id);
     if (!objective) {
-      return NextResponse.json({ success: false, error: "Objective not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Objective not found" },
+        { status: 404 }
+      );
     }
 
-    if (!isGroqConfigured()) {
-      const fallback = buildFallbackTeachContent(objective);
-      return NextResponse.json({ success: true, data: fallback });
-    }
+    const cert = getCertificationById(objective.certification_id);
 
-    // Scrape real course/documentation content from the web using Bright Data
-    let scrapedMaterial = "";
-    if (isBrightDataConfigured()) {
+    const url = new URL(request.url);
+    const mode = url.searchParams.get("mode");
+    const force = url.searchParams.get("force") === "true";
+
+    // ── 1. Check DB Cache First (Only scrape if cache missing or force=true) ──
+    const cached = !force ? getRecentScrapedSourceForObjective(objective.id, 168) : null; // 7 days cache
+    if (cached?.raw_content) {
+      let cachedExtraction: ExtractionResult | null = null;
       try {
-        const scrapeResult = await scrapeObjectiveContent({
-          id: objective.id,
-          title: objective.title,
-          description: objective.description,
-          certification_id: objective.certification_id,
-          domain_title: objective.domain_title,
-          objective_code: objective.objective_code,
-        });
-
-        if (scrapeResult.combinedContent) {
-          scrapedMaterial = scrapeResult.combinedContent;
-
-          // Persist each scraped source so it appears in the sources panel
-          for (const src of scrapeResult.sources) {
-            const sourceId = `src-teach-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
-            saveScrapedSource({
-              id: sourceId,
-              url: src.url,
-              title: src.title,
-              rawContent: src.content,
-              contentHash: `sha256:${crypto.createHash("sha256").update(src.content).digest("hex")}`,
-              scrapeMethod: scrapeResult.scrapeMethod,
-              status: "success",
-              objectiveId: objective.id,
-            });
-          }
-
-          console.info(
-            `[teach] grounded objective "${objective.title}" with ${scrapeResult.sources.length} scraped source(s) via ${scrapeResult.scrapeMethod}`
-          );
+        const parsed = JSON.parse(cached.raw_content);
+        if (parsed && (parsed.title || parsed.key_concepts?.length)) {
+          cachedExtraction = parsed;
         }
-      } catch (scrapeErr: any) {
-        // Non-fatal — fall through to LLM-only generation
-        console.warn(`[teach] Bright Data scrape failed for "${objective.title}": ${scrapeErr?.message}`);
+      } catch {
+        // Not JSON
+      }
+
+      if (cachedExtraction) {
+        if (!isGroqConfigured()) {
+          return NextResponse.json({
+            success: true,
+            persisted: true,
+            cached: true,
+          });
+        }
+
+        const content = await generateTeachContent(
+          objective,
+          cachedExtraction,
+          cached.url || "Cached Official Documentation",
+          mode === "reteach"
+        );
+
+        return NextResponse.json({
+          success: true,
+          data: {
+            ...content,
+            sources_used: `Bright Data Scraper Studio — ${cached.url}`,
+          },
+          scrape_status: {
+            path: "primary",
+            source_confidence: "official_blueprint",
+            source_label: "Official source (cached)",
+            healed: false,
+            outcome: "valid",
+            source_url: cached.url,
+          },
+        });
       }
     }
 
-    const content = await generateTeachContent(objective, scrapedMaterial);
-    cache.set(id, content);
-    return NextResponse.json({ success: true, data: content });
+    // ── 2. Run Scrape if no valid cached content exists ─────────────────────
+    const scrapeResult = await scrapeObjectiveContent({
+      id: objective.id,
+      title: objective.title,
+      description: objective.description,
+      certification_id: objective.certification_id,
+      domain_title: objective.domain_title,
+      objective_code: objective.objective_code,
+      cert_title: cert?.title,
+      cert_provider: cert?.provider,
+      skills: objective.skills,
+    });
+
+    if (!scrapeResult.scrape_status) {
+       return NextResponse.json(
+         { 
+           success: false, 
+           error: "extraction_failed", 
+           reason: "missing_scrape_metadata", 
+           user_message: "An internal error occurred while verifying the source. Please try again.",
+           scrape_status: scrapeResult.scrape_status 
+         },
+         { status: 422 }
+       );
+    }
+
+    if (
+      scrapeResult.scrape_status.outcome === "failed" ||
+      !scrapeResult.scrape_status.path ||
+      scrapeResult.scrape_status.healed === undefined ||
+      !scrapeResult.scrape_status.source_url
+    ) {
+      let reason = scrapeResult.scrape_status?.failure_reason || "missing_scrape_metadata";
+      if (!scrapeResult.scrape_status.path || scrapeResult.scrape_status.healed === undefined || !scrapeResult.scrape_status.source_url) {
+        reason = "missing_scrape_metadata";
+      }
+      
+      const userMessageMap: Record<string, string> = {
+        no_official_url_found: "We couldn't find official documentation for this topic right now.",
+        fallback_invocation_failed: "We couldn't reach the documentation source right now. Please try again.",
+        validation_failed_after_heal: "We found the source but couldn't extract the required information, even after an automatic repair attempt.",
+        scraper_run_failed: "We couldn't retrieve the documentation page right now. Please try again.",
+        missing_scrape_metadata: "An internal error occurred while verifying the source. Please try again.",
+      };
+      
+      return NextResponse.json(
+        {
+          success: false,
+          error: "extraction_failed",
+          reason,
+          user_message: userMessageMap[reason] || userMessageMap.missing_scrape_metadata,
+          scrape_status: scrapeResult.scrape_status,
+        },
+        { status: 422 }
+      );
+    }
+
+    // Persist source
+    for (const src of scrapeResult.sources) {
+      const sourceId = `src-teach-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+      saveScrapedSource({
+        id: sourceId,
+        url: src.url,
+        title: src.title,
+        rawContent: src.content,
+        contentHash: `sha256:${crypto.createHash("sha256").update(src.content).digest("hex")}`,
+        scrapeMethod: scrapeResult.scrapeMethod,
+        status: "success",
+        objectiveId: objective.id,
+      });
+    }
+
+    if (!isGroqConfigured()) {
+      return NextResponse.json({
+        success: true,
+        persisted: true,
+        scrape_status: scrapeResult.scrape_status
+      });
+    }
+
+    const content = await generateTeachContent(
+      objective, 
+      scrapeResult.extraction_result!, 
+      scrapeResult.scrape_status.source_url,
+      mode === "reteach"
+    );
+
+    const sourceConfidenceMap: Record<string, string> = {
+      official_blueprint: "Official source",
+      provider_derived: "Official-domain source discovered automatically",
+      fallback_discovered: "Official-domain source discovered via search"
+    };
+
+    const responseData: any = {
+      success: true,
+      data: {
+        ...content,
+        sources_used: `Bright Data Scraper Studio — ${scrapeResult.scrape_status.source_url}`,
+      },
+      scrape_status: {
+        ...scrapeResult.scrape_status,
+        source_label: sourceConfidenceMap[scrapeResult.scrape_status.source_confidence] || "Official source",
+      },
+    };
+
+    if (scrapeResult.scrape_status.healed) {
+      responseData.heal_badge = `[~] scraper healed — missing ${scrapeResult.scrape_status.missing_fields_recovered || 'fields'} recovered`;
+    }
+    
+    if (scrapeResult.scrape_status.path === "fallback") {
+      responseData.source_note = "Content URL discovered via Bing search; page scraped directly by Bright Data.";
+    }
+
+    return NextResponse.json(responseData);
   } catch (error: any) {
     console.error("[teach] route error:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }
 
-function buildFallbackTeachContent(objective: any) {
-  return {
-    what_it_is: objective.description,
-    why_it_matters: `This topic accounts for a portion of the ${objective.domain_title || 'exam'} domain and frequently appears in exam scenarios. Understanding it well directly improves your readiness score.`,
-    key_concepts: [
-      { term: objective.title, definition: objective.description },
-    ],
-    how_it_works: `${objective.title} is a core component of the exam. Review the official documentation to understand the configuration options, limits, and integration patterns that exam questions typically test.`,
-    common_mistakes: [
-      "Confusing this service with a similar one that solves a different problem",
-      "Overlooking default limits and quotas that affect architectural decisions",
-      "Missing the difference between sync and async variants where applicable",
-    ],
-    exam_tip: `On the exam, questions about ${objective.title} often present a scenario and ask which configuration or service combination best meets the stated requirements. Focus on cost, availability, and security tradeoffs.`,
+async function generateTeachContent(
+  objective: any,
+  extraction: ExtractionResult,
+  sourceUrl: string,
+  isReteach: boolean = false
+) {
+  const formatField = (field: any) => {
+    if (Array.isArray(field) && field.length === 0) return "null";
+    if (!field) return "null";
+    return JSON.stringify(field, null, 2);
   };
-}
 
-async function generateTeachContent(objective: any, scrapedMaterial: string = "") {
-  const hasScraping = scrapedMaterial.trim().length > 100;
-
-  const scrapingSection = hasScraping
-    ? `
-REAL COURSE MATERIAL (scraped from official documentation — use this as your primary source):
+  const scrapingSection = `
+REAL COURSE MATERIAL (scraped from official documentation — use this as your ONLY source of truth):
 ---
-${scrapedMaterial.substring(0, 10000)}
+title: ${formatField(extraction.title)}
+summary: ${formatField(extraction.summary)}
+learning_outcomes: ${formatField(extraction.learning_outcomes)}
+key_concepts: ${formatField(extraction.key_concepts)}
+api_names: ${formatField(extraction.api_names)}
+limits: ${formatField(extraction.limits)}
+code_examples: ${formatField(extraction.code_examples)}
 ---
 
-IMPORTANT: Base your explanation on the above real documentation. Extract actual facts, terminology, service names, configuration options, and limits from it. Do NOT fabricate specifics — if the scraped content covers a concept, quote or paraphrase it accurately. If the scraped content does not cover a point, use your training knowledge for that part but clearly stay grounded in the real material.`
-    : `
-No scraped material available. Use your training knowledge, but be accurate and specific — avoid generic AI-generated filler.`;
+GROUNDED GENERATION RULES:
+- Base your teaching ONLY on the real documentation provided above.
+- Extract actual facts, terminology, commands, parameters, and limits from the extracted evidence.
+- Do NOT hallucinate or use external general knowledge to fill in gaps.
+- If a detail is absent in the source material, omit it rather than inventing it.
+`;
 
-  const prompt = `You are an expert instructor teaching a developer preparing for the ${objective.certification_id || 'cloud'} certification exam.
+  const reteachInstruction = isReteach ? 
+    "This is a RETEACH session because the learner previously struggled with a practice question on this topic. Emphasize the common_mistakes and exam_tip fields to specifically address misconceptions." : "";
 
-Your job is to TEACH the following exam objective from first principles. Do NOT tell the learner what they should study — explain the concept directly, as if you are the textbook.
+  const prompt = `You are an expert technical instructor teaching a developer preparing for the ${
+    objective.certification_id || "cloud"
+  } certification exam.
+
+Your job is to TEACH the following exam objective from first principles using clean, structured, informative bullet points. Do NOT write dense paragraph walls.
 ${scrapingSection}
 
-Exam Objective: ${objective.objective_code}. ${objective.title}
-Domain: ${objective.domain_title || ''}
-Description: ${objective.description}
-Importance: ${objective.importance}
+${reteachInstruction}
 
-Write teaching content that:
-- Explains WHAT the thing IS using the real documentation as your source (not "you need to know about X" — instead explain X itself with actual product details)
-- Uses simple, direct language for a smart developer who is new to this topic
-- Avoids filler phrases like "it is important to understand" or "you should know"
-- Gives concrete examples drawn from the scraped material (e.g. real service limits, actual configuration options, real API names)
-- Explains WHY this exists and what problem it solves
-- Highlights the key tradeoffs that exam questions test
+Exam Objective: ${objective.objective_code || ""}. ${objective.title}
+Domain: ${objective.domain_title || ""}
+Description: ${objective.description || ""}
+
+FORMATTING REQUIREMENTS:
+- Use concise, high-signal bullet points. Each bullet should be 1-2 clear, punchy sentences explaining a specific fact or mechanism.
+- Avoid conversational filler phrases like "it is important to understand" or "in this section we will".
+- Highlight concrete specifics from docs (service names, config options, limits, APIs).
 
 Return ONLY valid JSON with this exact structure:
 {
-  "what_it_is": "2-4 sentence plain explanation of what this IS. Ground this in the real documentation. No 'you should know' framing.",
-  "analogy": "One concrete real-world analogy that makes the concept click (1-2 sentences)",
-  "why_it_exists": "1-2 sentences explaining the real problem this was built to solve",
-  "how_it_works": "3-5 sentences explaining the mechanics — how it actually operates, with real details from the docs where available",
+  "what_it_is": [
+    "First core definition bullet point grounded in real documentation.",
+    "Second key characteristic or architectural role."
+  ],
+  "analogy": "One concrete real-world analogy or mental model (1-2 sentences)",
+  "why_it_exists": [
+    "The primary problem this architecture/service was created to solve.",
+    "The operational or business benefit over traditional approaches."
+  ],
+  "how_it_works": [
+    "Step 1 or primary operational mechanism (e.g. provisioning, configuration).",
+    "Step 2 or runtime interaction (e.g. CLI commands, SDK calls, authentication).",
+    "Step 3 or lifecycle/scaling/storage behavior from documentation."
+  ],
   "key_concepts": [
-    {"term": "short term or sub-concept from the real docs", "definition": "plain 1-sentence definition based on actual documentation"}
+    {"term": "technical term from docs", "definition": "plain 1-sentence technical definition based on docs"}
   ],
   "common_mistakes": [
-    "One specific misconception or trap the exam tests",
-    "Another common mistake"
+    "First specific misconception or exam trap (e.g. confusing tier vs region limits).",
+    "Second common mistake tested on the exam."
   ],
-  "exam_tip": "The single most important thing to remember when answering exam questions about this topic (1-2 sentences, focused on tradeoffs or decision criteria)",
-  "sources_used": ${hasScraping ? '"real documentation scraped via Bright Data"' : '"LLM training knowledge (no live documentation available)"'}
+  "exam_tip": "The single most critical takeaway or tradeoff decision rule for the exam (1-2 sentences)."
 }`;
 
-  try {
-    const result = await createGroqJsonCompletion(prompt);
-
-    if (!result?.what_it_is) {
-      return buildFallbackTeachContent(objective);
+  const rawResult = await createGroqJsonCompletion(prompt);
+  
+  // Normalize string outputs to arrays if LLM returned strings
+  const normalizeToArray = (val: any): string[] => {
+    if (Array.isArray(val)) {
+      return val.map((s) => String(s).trim()).filter(Boolean);
     }
+    if (typeof val === "string" && val.trim()) {
+      return val
+        .split(/(?<=[.!?])\s+/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 5);
+    }
+    return [];
+  };
 
-    return result;
-  } catch (err: any) {
-    console.warn("[teach] Groq generation failed:", err?.message);
-    return buildFallbackTeachContent(objective);
-  }
+  return {
+    what_it_is: normalizeToArray(rawResult.what_it_is),
+    analogy: typeof rawResult.analogy === "string" ? rawResult.analogy.trim() : "",
+    why_it_exists: normalizeToArray(rawResult.why_it_exists),
+    how_it_works: normalizeToArray(rawResult.how_it_works),
+    key_concepts: Array.isArray(rawResult.key_concepts) ? rawResult.key_concepts : [],
+    common_mistakes: normalizeToArray(rawResult.common_mistakes),
+    exam_tip: typeof rawResult.exam_tip === "string" ? rawResult.exam_tip.trim() : "",
+  };
 }

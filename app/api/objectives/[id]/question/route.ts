@@ -1,145 +1,155 @@
 import { NextResponse } from "next/server";
-import { getQuestionsByObjective, getObjectiveById } from "@/lib/db/queries";
-import { getDb } from "@/lib/db/index";
-import { isGroqConfigured, createGroqJsonCompletion } from "@/lib/groq";
+import {
+  getObjectiveById,
+  getQuestionsByObjective,
+  getRecentScrapedSourceForObjective,
+} from "@/lib/db/queries";
+import { createGroqJsonCompletion } from "@/lib/groq";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await context.params;
-
-    // First: check existing seeded questions
-    const existing = getQuestionsByObjective(id);
-    if (existing.length > 0) {
-      const q = existing[Math.floor(Math.random() * existing.length)];
-      return NextResponse.json({ success: true, data: q });
-    }
-
-    // No seeded question — generate one with Groq if available
     const objective = getObjectiveById(id);
     if (!objective) {
-      return NextResponse.json({ success: true, data: null });
+      return NextResponse.json(
+        { success: false, error: "Objective not found" },
+        { status: 404 }
+      );
     }
 
-    if (!isGroqConfigured()) {
-      // Return a basic MCQ placeholder when no LLM is configured
-      const fallback = buildFallbackQuestion(objective);
-      return NextResponse.json({ success: true, data: fallback });
+    // 1. Check existing questions in DB
+    const existing = getQuestionsByObjective(id);
+    if (existing && existing.length > 0) {
+      const randomIndex = Math.floor(Math.random() * existing.length);
+      return NextResponse.json({
+        success: true,
+        data: existing[randomIndex],
+      });
     }
 
-    // Generate via Groq
-    const generated = await generateQuestionWithGroq(objective);
-    if (!generated) {
-      const fallback = buildFallbackQuestion(objective);
-      return NextResponse.json({ success: true, data: fallback });
+    // 2. Generate a practice question using Groq and cached documentation
+    const cached = getRecentScrapedSourceForObjective(id, 168);
+    let extractionResult: any = null;
+    if (cached?.raw_content) {
+      try {
+        extractionResult = JSON.parse(cached.raw_content);
+      } catch {
+        // Not JSON
+      }
     }
 
-    // Persist so we don't regenerate every time
-    const db = getDb();
-    const optJson = JSON.stringify(generated.options);
-    const correctStr = typeof generated.correct_answer === "object"
-      ? JSON.stringify(generated.correct_answer)
-      : generated.correct_answer;
+    const keyConceptsText = extractionResult?.key_concepts
+      ? JSON.stringify(extractionResult.key_concepts)
+      : objective.description;
 
-    const qId = `q-gen-${id}-${Date.now()}`;
-    db.prepare(`
-      INSERT OR IGNORE INTO practice_questions
-        (id, objective_id, question_type, difficulty, stem, options_json, correct_answer, explanation, official_doc_url, service_tags, validation_status)
-      VALUES (?, ?, 'mcq', 'exam', ?, ?, ?, ?, ?, '[]', 'ai_generated')
-    `).run(qId, id, generated.stem, optJson, correctStr, generated.explanation || "", generated.official_doc_url || "");
+    const learningOutcomesText = extractionResult?.learning_outcomes
+      ? JSON.stringify(extractionResult.learning_outcomes)
+      : objective.title;
 
-    // Return in parsed form
+    const prompt = `You are an expert exam question author for the ${objective.certification_id || "cloud"} certification exam.
+
+Objective: ${objective.objective_code}. ${objective.title}
+Domain: ${objective.domain_title || ""}
+Description: ${objective.description}
+
+Here is official documentation content for this objective:
+Key Concepts: ${keyConceptsText}
+Learning Outcomes: ${learningOutcomesText}
+
+Write ONE high-quality multiple choice question (MCQ) testing a real decision or tradeoff regarding this topic.
+The question must have 4 options and exactly 1 correct answer (specified as index 0, 1, 2, or 3).
+
+Return ONLY valid JSON with this exact structure:
+{
+  "stem": "Detailed exam-style question scenario with concrete requirements...",
+  "options": [
+    "Option A description",
+    "Option B description",
+    "Option C description",
+    "Option D description"
+  ],
+  "correct_answer": 0,
+  "explanation": "Detailed 2-3 sentence explanation of why the correct answer is right and why distractors are wrong."
+}`;
+
+    const aiRes = await createGroqJsonCompletion(prompt);
+
+    const generatedQuestion = {
+      id: `gen-q-${id}-${Date.now()}`,
+      objective_id: id,
+      question_type: "mcq",
+      difficulty: "intermediate",
+      stem: aiRes.stem || aiRes.question,
+      options: aiRes.options || [],
+      correct_answer: typeof aiRes.correct_answer === "number" ? aiRes.correct_answer : (typeof aiRes.correct_index === "number" ? aiRes.correct_index : 0),
+      explanation: aiRes.explanation || "Correct based on official documentation.",
+      official_doc_url: cached?.url || objective.skills?.[0]?.official_doc_url || null,
+      service_tags: [objective.title],
+      validation_status: "ai_generated",
+    };
+
     return NextResponse.json({
       success: true,
-      data: {
-        ...generated,
-        id: qId,
-        objective_id: id,
-        question_type: "mcq",
-        difficulty: "exam",
-        service_tags: [],
-        ordering_items: [],
-        matching_pairs: [],
-        case_study: null,
-      },
+      data: generatedQuestion,
     });
   } catch (error: any) {
-    console.error("[question] route error:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error("[question GET error]", error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }
 
-function buildFallbackQuestion(objective: any) {
-  const options = [
-    { id: "opt-a", text: "Review the official documentation for this objective", explanation: "The official docs are the authoritative source for exam content." },
-    { id: "opt-b", text: "Skip this objective entirely", explanation: "Skipping critical objectives will reduce your readiness score." },
-    { id: "opt-c", text: "Rely only on third-party summaries", explanation: "Third-party summaries may be outdated or inaccurate." },
-    { id: "opt-d", text: "Guess on the exam", explanation: "Guessing without preparation is not a reliable strategy." },
-  ];
-
-  return {
-    id: `fallback-${objective.id}`,
-    objective_id: objective.id,
-    question_type: "mcq",
-    difficulty: "exam",
-    stem: `Which approach best prepares you for the objective: "${objective.title}"?\n\n${objective.description}`,
-    options,
-    correct_answer: "opt-a",
-    explanation: `The best approach for mastering "${objective.title}" is to review the official documentation. This objective covers: ${objective.description}`,
-    official_doc_url: null,
-    service_tags: [],
-    ordering_items: [],
-    matching_pairs: [],
-    case_study: null,
-  };
-}
-
-async function generateQuestionWithGroq(objective: any) {
-  const prompt = `You are an expert certification exam question writer for technical cloud certifications.
-
-Generate a realistic, exam-quality multiple-choice question (MCQ) for the following exam objective:
-
-Objective: ${objective.objective_code}. ${objective.title}
-Description: ${objective.description}
-Domain: ${objective.domain_title}
-Importance: ${objective.importance}
-
-Requirements:
-- The question must test real technical knowledge, not meta-knowledge about studying
-- Write a scenario-based question (e.g. "You are building X, which approach should you take?")
-- Provide exactly 4 answer options (opt-a through opt-d)
-- Only one correct answer
-- Include a brief explanation for each option
-- The explanation field should explain WHY the correct answer is correct and why the others are wrong
-- Return valid JSON only
-
-Return this exact JSON structure:
-{
-  "stem": "question text here",
-  "options": [
-    {"id": "opt-a", "text": "...", "explanation": "..."},
-    {"id": "opt-b", "text": "...", "explanation": "..."},
-    {"id": "opt-c", "text": "...", "explanation": "..."},
-    {"id": "opt-d", "text": "...", "explanation": "..."}
-  ],
-  "correct_answer": "opt-a",
-  "explanation": "Full explanation of why the correct answer is correct and others are wrong.",
-  "official_doc_url": "https://learn.microsoft.com/..."
-}`;
-
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
-    const result = await createGroqJsonCompletion(prompt);
-
-    if (!result?.stem || !Array.isArray(result?.options) || result.options.length !== 4) {
-      console.warn("[question] Groq returned malformed question:", result);
-      return null;
+    const { id } = await context.params;
+    const objective = getObjectiveById(id);
+    if (!objective) {
+      return NextResponse.json({ error: "Objective not found" }, { status: 404 });
     }
 
-    return result;
-  } catch (err: any) {
-    console.warn("[question] Groq generation failed:", err?.message);
-    return null;
+    const cached = getRecentScrapedSourceForObjective(id, 168);
+    if (!cached || !cached.raw_content) {
+      return NextResponse.json({ error: "extraction_failed" }, { status: 422 });
+    }
+
+    let extractionResult: any;
+    try {
+      extractionResult = JSON.parse(cached.raw_content);
+      if (!extractionResult.title && !extractionResult.key_concepts) {
+        return NextResponse.json({ error: "extraction_failed" }, { status: 422 });
+      }
+    } catch {
+      return NextResponse.json({ error: "extraction_failed" }, { status: 422 });
+    }
+
+    const prompt = `You are an expert instructor preparing a developer for an exam.
+Here is the official documentation for the topic "${objective.title}":
+Key Concepts: ${JSON.stringify(extractionResult.key_concepts)}
+Learning Outcomes: ${JSON.stringify(extractionResult.learning_outcomes)}
+
+Generate a single multiple-choice practice question based ONLY on these facts. Do not invent facts outside of this content.
+Return ONLY valid JSON with this exact structure:
+{
+  "question": "The question text",
+  "options": ["Option A", "Option B", "Option C", "Option D"],
+  "correct_index": 0,
+  "explanation": "Brief explanation of why this is correct based on the text."
+}`;
+
+    const result = await createGroqJsonCompletion(prompt);
+    return NextResponse.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
