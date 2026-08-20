@@ -72,9 +72,40 @@ export function getKnowledgeGraph(examVersionId: string) {
   return domains;
 }
 
+import fs from "fs";
+import path from "path";
+
+let blueprintSkillsCache: Map<string, any[]> | null = null;
+
+export function getSkillsForObjective(objectiveId: string): any[] {
+  if (!blueprintSkillsCache) {
+    blueprintSkillsCache = new Map();
+    try {
+      const blueprintsDir = path.join(process.cwd(), "data", "blueprints");
+      if (fs.existsSync(blueprintsDir)) {
+        const files = fs.readdirSync(blueprintsDir);
+        for (const file of files) {
+          if (!file.endsWith(".json") || file === "changes-timeline.json") continue;
+          const content = JSON.parse(fs.readFileSync(path.join(blueprintsDir, file), "utf-8"));
+          for (const domain of content.domains || []) {
+            for (const obj of domain.objectives || []) {
+              if (obj.id && obj.skills) {
+                blueprintSkillsCache.set(obj.id, obj.skills);
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[queries] Failed to load blueprint skills cache:", e);
+    }
+  }
+  return blueprintSkillsCache.get(objectiveId) || [];
+}
+
 export function getObjectivesByVersion(examVersionId: string) {
   const db = getDb();
-  return db
+  const rows = db
     .prepare(`
       SELECT o.*, d.domain_code, d.title as domain_title, d.sort_order as domain_sort
       FROM objectives o
@@ -83,11 +114,15 @@ export function getObjectivesByVersion(examVersionId: string) {
       ORDER BY d.sort_order ASC, o.sort_order ASC
     `)
     .all(examVersionId) as any[];
+  for (const obj of rows) {
+    obj.skills = getSkillsForObjective(obj.id);
+  }
+  return rows;
 }
 
 export function getObjectiveById(id: string) {
   const db = getDb();
-  return db
+  const obj = db
     .prepare(`
       SELECT o.*, d.domain_code, d.title as domain_title, d.exam_version_id,
              ev.certification_id
@@ -97,6 +132,10 @@ export function getObjectiveById(id: string) {
       WHERE o.id = ?
     `)
     .get(id) as any;
+  if (obj) {
+    obj.skills = getSkillsForObjective(obj.id);
+  }
+  return obj;
 }
 
 // ─── Practice Questions ───────────────────────────────────────────────────────
@@ -356,6 +395,72 @@ export function getScrapedSources(objectiveId?: string) {
   return db
     .prepare("SELECT * FROM scraped_sources ORDER BY scraped_at DESC LIMIT 50")
     .all() as any[];
+}
+
+/**
+ * Returns the most recent successfully scraped source for an objective
+ * if it was scraped within `maxAgeHours` (default 24h). Returns null if stale or missing.
+ */
+export function getRecentScrapedSourceForObjective(
+  objectiveId: string,
+  maxAgeHours: number = 24
+): any | null {
+  const db = getDb();
+  const row = db
+    .prepare(`
+      SELECT * FROM scraped_sources
+      WHERE objective_id = ?
+        AND status = 'success'
+        AND raw_content IS NOT NULL
+        AND raw_content != ''
+        AND datetime(scraped_at) >= datetime('now', '-' || ? || ' hours')
+      ORDER BY scraped_at DESC
+      LIMIT 1
+    `)
+    .get(objectiveId, maxAgeHours) as any;
+  return row || null;
+}
+
+/**
+ * Delete all scraped sources for an objective, forcing a fresh scrape next time.
+ */
+export function invalidateScrapedSourcesForObjective(objectiveId: string) {
+  const db = getDb();
+  db.prepare("DELETE FROM scraped_sources WHERE objective_id = ?").run(objectiveId);
+}
+
+/**
+ * Delete all AI-generated practice questions for an objective so they get
+ * regenerated with the latest scrape content.
+ */
+export function deleteGeneratedQuestionsForObjective(objectiveId: string) {
+  const db = getDb();
+  db.prepare(
+    "DELETE FROM practice_questions WHERE objective_id = ? AND validation_status = 'ai_generated'"
+  ).run(objectiveId);
+}
+
+/**
+ * Get all objectives for a certification (across all active exam versions).
+ */
+export function getObjectivesByCertId(certId: string): any[] {
+  const db = getDb();
+  const rows = db
+    .prepare(`
+      SELECT o.*, d.domain_code, d.title as domain_title, d.exam_version_id,
+             ev.certification_id
+      FROM objectives o
+      JOIN domains d ON o.domain_id = d.id
+      JOIN exam_versions ev ON d.exam_version_id = ev.id
+      WHERE ev.certification_id = ?
+        AND ev.status = 'active'
+      ORDER BY d.sort_order ASC, o.sort_order ASC
+    `)
+    .all(certId) as any[];
+  for (const obj of rows) {
+    obj.skills = getSkillsForObjective(obj.id);
+  }
+  return rows;
 }
 
 // ─── Freshness Alerts ─────────────────────────────────────────────────────────
