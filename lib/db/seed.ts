@@ -17,8 +17,12 @@ export function seedDataIfEmpty(db: Database.Database) {
     )
     .all() as { id: string }[];
 
-  // All 3 already seeded — nothing to do
-  if (existing.length >= 3) return;
+  // Check if freshness alerts table has entries
+  const existingAlerts = db.prepare("SELECT COUNT(*) as cnt FROM freshness_alerts").get() as { cnt: number };
+  const needsAlerts = (existingAlerts?.cnt ?? 0) === 0;
+
+  // All 3 certs already seeded and alerts present — nothing to do
+  if (existing.length >= 3 && !needsAlerts) return;
 
   const blueprints = [
     "ai-103.json",
@@ -46,6 +50,72 @@ export function seedDataIfEmpty(db: Database.Database) {
         continue;
       }
       seedFromBlueprint(db, blueprint);
+    }
+
+    // Seed official documentation sources for all 3 blueprints
+    const sourcesPath = path.join(
+      process.cwd(),
+      "data",
+      "blueprints",
+      "scraped-sources.json"
+    );
+    if (fs.existsSync(sourcesPath)) {
+      try {
+        const sources = JSON.parse(fs.readFileSync(sourcesPath, "utf-8"));
+        for (const src of sources) {
+          db.prepare(`
+            INSERT OR REPLACE INTO scraped_sources
+              (id, url, title, raw_content, content_hash, scraped_at, scrape_method, status, objective_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            src.id,
+            src.url,
+            src.title,
+            src.raw_content,
+            src.content_hash,
+            src.scraped_at || new Date().toISOString(),
+            src.scrape_method || "brightdata-scraper-studio-primary",
+            src.status || "success",
+            src.objective_id
+          );
+        }
+        console.info(`[seed] Seeded ${sources.length} official documentation sources`);
+      } catch (e) {
+        console.warn("[seed] Failed to parse scraped-sources.json:", e);
+      }
+    }
+
+    // Seed freshness alerts
+    const timelinePath = path.join(
+      process.cwd(),
+      "data",
+      "blueprints",
+      "changes-timeline.json"
+    );
+    if (fs.existsSync(timelinePath)) {
+      try {
+        const changes = JSON.parse(fs.readFileSync(timelinePath, "utf-8"));
+        for (const ch of changes) {
+          const alertType = ch.change_type === "api_deprecation" ? "deprecated" : ch.severity === "breaking" ? "breaking_change" : "updated";
+          const objId = Array.isArray(ch.affected_objectives) && ch.affected_objectives.length > 0 ? ch.affected_objectives[0] : "obj-202";
+          db.prepare(`
+            INSERT OR IGNORE INTO freshness_alerts
+              (id, objective_id, alert_type, title, summary, source_url, detected_at, is_read)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+          `).run(
+            ch.id,
+            objId,
+            alertType,
+            ch.title,
+            ch.summary,
+            ch.official_changelog_url || null,
+            ch.detected_at || new Date().toISOString()
+          );
+        }
+        console.info(`[seed] Seeded ${changes.length} freshness alerts`);
+      } catch (e) {
+        console.warn("[seed] Failed to parse changes-timeline.json:", e);
+      }
     }
   })();
 }

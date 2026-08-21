@@ -21,8 +21,9 @@
 /build
 
 # database & data
-/data/
-*.db
+# We want the SQLite DB to deploy to Vercel for the judges to see it
+!/data/
+!/data/delta-saas.db
 *.db-shm
 *.db-wal
 

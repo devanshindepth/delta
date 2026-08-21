@@ -1,262 +1,194 @@
+<h1 align="center">Delta</h1>
+
+<p align="center">
+  <strong>Certification prep environment for engineers.</strong><br>
+  Describe a certification in plain language — Delta scrapes the official exam blueprint live, structures it into objectives, and builds a study course around it.
+</p>
+
+<p align="center">
+  <img src="./public/home-page.png" alt="Delta Home Page Preview" width="100%" />
+</p>
+
+---
+
+## what it does
+
+1. Takes a certification name as natural language input
+2. Scrapes the official exam blueprint via Bright Data
+3. Structures domains and objectives using Groq LLM
+4. Generates lessons and practice questions per objective
+5. Tracks readiness and gaps across the full syllabus
+
+---
+
+## stack
+
+| layer | technology |
+|---|---|
+| framework | Next.js 16.3.1 (App Router) |
+| language | TypeScript 5 |
+| ui | React 19, Tailwind CSS 4 |
+| database | SQLite + better-sqlite3 |
+| auth | Better Auth 1.6 |
+| ai | Groq SDK (`openai/gpt-oss-120b`) |
+| scraping | Bright Data SDK + Cheerio |
+| editor | Monaco Editor |
+
+---
+
+## system architecture
+
 ```
-     _   _____  _     _____  _    
-    / \ |  ___|/ \   |_   _|/ \   
-   / _ \| |_  / _ \    | | / _ \  
-  / ___ \  _|/ ___ \   | |/ ___ \ 
- /_/   \_\_|/_/   \_\  |_/_/   \_\
-                                  
-   D E L T A  --  K N O W L E D G E  &  S K I L L  E N G I N E
+               [ User Natural Language Input ]
+                              │
+                              ▼
+┌───────────────────────────────────────────────────────────┐
+│                    Next.js App Router                     │
+│           (React 19, Tailwind 4, Framer Motion)           │
+└─────────────────────────────┬─────────────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+┌───────────────────────────┐   ┌───────────────────────────┐
+│     Ingestion Engine      │   │    Persistence & Auth     │
+│ Bright Data SDK + Cheerio │   │ Better Auth + SQLite (WAL)│
+└─────────────┬─────────────┘   └───────────────────────────┘
+              │ (Raw Blueprints & Docs)
+              ▼
+┌───────────────────────────────────────────────────────────┐
+│                      Groq AI Engine                       │
+│    (Dynamic Fallback: gpt-oss-120b / Llama-3.3-70b)       │
+└─────────────────────────────┬─────────────────────────────┘
+                              │ (Structured Blueprint JSON)
+                              ▼
+┌───────────────────────────────────────────────────────────┐
+│                   Adaptive Study Loop                     │
+│  • Domain & Objective Synthesis                           │
+│  • Interactive Lessons & Code Labs                        │
+│  • Exam-Standard Practice Questions                       │
+│  • Readiness Alignment (Coverage + Freshness + Practice)  │
+└───────────────────────────────────────────────────────────┘
 ```
 
-> **Delta** is a terminal-native, high-precision technical learning & skill graph platform built for software engineers, systems architects, and technical teams to master rapidly evolving technology ecosystems.
+### core subsystems
+
+1. **Ingestion & Web Scraping Pipeline (`lib/ingestion/`)**:
+   - Fetches live certification blueprints directly from vendor portals (AWS, Microsoft, GCP, CNCF, HashiCorp).
+   - Combines Bright Data Web Unlocker / Scraper Studio CLI with Cheerio parsing to keep syllabus data fresh and resilient.
+
+2. **AI Synthesizer & Groq Orchestration (`lib/groq.ts`)**:
+   - Uses Groq SDK with automatic dynamic model discovery (`openai/gpt-oss-120b`) and fallback routing.
+   - Cleans and converts unstructured HTML/Markdown into validated JSON schemas for domains, learning outcomes, key technical concepts, and practice questions.
+
+3. **Data Persistence Layer (`lib/db/`)**:
+   - High-performance SQLite database driven by `better-sqlite3` with Write-Ahead Logging (WAL) and strict foreign key enforcement.
+   - Houses user accounts, active sessions, syllabus structures, user progress tracking, and readiness metrics.
+
+4. **Authentication & Session Management (`lib/auth.ts`)**:
+   - Powered by Better Auth 1.6 with secure email/password and session token validation across server components and API handlers.
+
+5. **Adaptive Learning & Alignment Engine (`app/api/`)**:
+   - Calculates real-time readiness scores combining Syllabus Coverage, Content Freshness, and Practice Mastery.
+   - Triggers interactive verification checks ("Prove to Skip") and unlocks mock exams automatically when thresholds are reached.
 
 ---
 
-[![Next.js](https://img.shields.io/badge/Next.js-16.3.1-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-19.2.8-000000?style=for-the-badge&logo=react&logoColor=white)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-000000?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Groq LLM](https://img.shields.io/badge/AI Engine-Groq%20Llama%203.3-000000?style=for-the-badge&logo=groq&logoColor=white)](https://groq.com/)
-[![Bright Data](https://img.shields.io/badge/Ingestion-Bright%20Data-000000?style=for-the-badge&logo=brightdata&logoColor=white)](https://brightdata.com/)
-[![License](https://img.shields.io/badge/License-MIT-000000?style=for-the-badge)](LICENSE)
-
----
-
-## 📌 Executive Summary
-
-Modern software engineering moves faster than human documentation processing speed. Frameworks update breaking APIs overnight, foundation models evolve monthly, and protocols change rapidly.
-
-**Delta** bridges the gap between raw documentation releases and practical engineering mastery:
-
-1. **Scrapes & Ingests** live documentation, release notes, and technical blogs via Bright Data & Cheerio.
-2. **Analyzes Technical Impact** using Groq-hosted LLMs to classify change severity (`breaking`, `new_capability`, `deprecated`).
-3. **Builds Directed Competency Graphs** mapping skill dependencies, confidence metrics, and prerequisite nodes.
-4. **Calculates Learning Deltas** to pinpoint exact missing knowledge hours when tech stacks shift.
-5. **Generates Sandboxed Challenges & Adaptive Lessons** using Piston code execution and automated counterexample evaluation.
-
----
-
-## 🏗️ System Architecture
-
-```mermaid
-flowchart TD
-    subgraph Ingestion["🌐 Live Content Ingestion"]
-        A[Documentation / Web / RSS] --> B[Bright Data Web Unlocker]
-        B --> C[Cheerio Parser & Extractor]
-    end
-
-    subgraph Intelligence["🧠 AI Reasoning & Impact Engine"]
-        C --> D[Groq Llama 3.3 / GPT-OSS Engine]
-        D --> E[Change Classifier & Impact Analyzer]
-        D --> F[Competency Graph Generator]
-    end
-
-    subgraph CoreEngine["⚙️ Delta Core Engine"]
-        F --> G[(SQLite DB / Drizzle ORM)]
-        E --> G
-        G --> H[Learning Delta Calculator]
-        G --> I[Adaptive Challenge & Prep Generator]
-    end
-
-    subgraph Verification["⚡ Sandboxed Execution & Verification"]
-        I --> J[Piston Code Sandbox API]
-        J --> K[Test Harness & Counterexample Engine]
-        K --> L[Evidence & Mastery Updater]
-        L --> G
-    end
-
-    subgraph UserInterface["🖥️ Terminal-Native UI"]
-        G --> M[Monochrome Next.js 16 Dashboard]
-        M --> N[Interactive Monaco Code Editor]
-        M --> O[ReactFlow Skill Graph]
-    end
-```
-
----
-
-## ✨ Key Features & Capability Modules
-
-### 1. 🌐 Bright Data Web Ingestion Architecture
-- **Web Unlocker & Proxy Pool Integration**: Automated scraping of enterprise technical documentation, GitHub releases, and blog posts with rate-limiting resilience.
-- **Self-Healing Fallback Pipeline**: Uses cheerio DOM cleaning for structured text extraction with native fallback when proxy services are unconfigured.
-
-### 2. 🧠 Directed Competency & Skill Graph Engine
-- **Automated DAG Generation**: Transforms learning objectives into 15–25 node competency graphs with directional relationships (`prerequisite`, `optional`, `specialization`, `shared`).
-- **Real-Time Evidence Tracking**: Updates node status (`not_started` ➔ `partial` ➔ `proven` ➔ `stale`) based on verified challenge submissions.
-
-### 3. ⚡ Learning Delta & Effort Estimation Engine
-- **Automated Gap Calculation**: Compares change impact vectors against current user competency nodes.
-- **Topological Learning Sequences**: Prioritizes prerequisite skills before dependent concepts and calculates total required study hours.
-
-### 4. 🧪 Sandboxed Code Verification & Counterexamples
-- **Piston Sandbox Integration**: Executes user code in isolated containers across Python, TypeScript, Go, Rust, and JavaScript.
-- **Counterexample Diagnostics**: When a test fails, the Groq engine analyzes trace logs and generates concrete input/output counterexamples to guide learning.
-
-### 5. 🎯 Adaptive Prep Loop & Socratic Learning
-- **Interactive Teaching AI**: Generates targeted bite-sized lessons tailored to user confidence levels.
-- **Dynamic Question Synthesis**: Constructs multi-format questions (multiple choice, code correction, implementation) to validate deep technical comprehension.
-
-### 6. 🎨 Monochrome Terminal Aesthetics
-- Built strictly according to the **Berkeley Mono Terminal Design System** (`#fdfcfc` canvas, `#201d1d` ink, 4px corner radii, bracketed ASCII indicators). Zero clutter, maximum density.
-
----
-
-## 🛠️ Tech Stack & Dependencies
-
-| Layer | Technology | Description |
-|---|---|---|
-| **Framework** | Next.js 16.3.1 (App Router) | Server Components, Route Handlers, Turbopack support |
-| **Frontend UI** | React 19, Tailwind CSS 4 | Monospaced UI layout with custom design primitives |
-| **Graph Visuals** | ReactFlow 11 | Directed acyclic graph rendering for skill networks |
-| **Editor** | Monaco Editor | Code editor component with syntax highlighting |
-| **Database** | SQLite + Drizzle ORM | High-performance, zero-latency local relational store |
-| **Authentication**| Better-Auth 1.6 | Cookie-based session authentication engine |
-| **AI LLM Client** | Groq SDK (`llama-3.3-70b-versatile` / `gpt-oss-120b`) | High-speed LLM inference |
-| **Scraper** | Bright Data SDK + Cheerio | Web scrapers & HTML text normalization |
-| **Execution** | Piston Sandbox API | Multi-language remote code execution runner |
-
----
-
-## 📂 Project Structure
+## project structure
 
 ```
 delta/
-├── app/                        # Next.js 16 App Router pages & APIs
-│   ├── (auth)/                 # Authentication views (sign-in, sign-up)
-│   ├── (dashboard)/            # Dashboard view routes
-│   │   ├── challenges/         # Coding challenge interface
-│   │   ├── changes/            # Technical change monitor
-│   │   ├── explore/            # Objective exploration
-│   │   ├── goals/              # Learning goal management
-│   │   ├── history/            # Activity timeline & submission logs
-│   │   ├── loop/               # Active learning loop interface
-│   │   ├── practice/           # Interactive code practice
-│   │   ├── prep/               # Adaptive interview/prep session
-│   │   ├── progress/           # Analytics & heatmap dashboard
-│   │   ├── skill-graph/        # Interactive ReactFlow competency graph
-│   │   ├── sources/            # Content ingestion source manager
-│   │   ├── to-review/          # Stale skill review queue
-│   │   └── understand/         # Learning delta breakdown
-│   ├── _components/            # Shared UI components (Navbar, Sidebar, Cards)
-│   └── api/                    # RESTful Route Handlers
-│       ├── auth/               # Better-Auth integration endpoints
-│       ├── certs/              # Certification update endpoints
-│       ├── challenges/         # Challenge execution & submission APIs
-│       ├── changes/            # Technical change analysis APIs
-│       ├── competency/         # Skill graph nodes & edges APIs
-│       ├── delta/              # Learning delta computation endpoints
-│       ├── generate/           # AI content generation routes
-│       ├── goals/              # Goal management routes
-│       ├── objectives/         # Socratic teaching & question APIs
-│       └── sources/            # Content ingestion routes
-├── lib/                        # Core business logic & engines
-│   ├── db/                     # Drizzle ORM database schemas & seeders
-│   │   ├── index.ts            # SQLite client connection
-│   │   ├── queries.ts          # Database CRUD query functions
-│   │   ├── schema.ts           # Relational table definitions
-│   │   └── seed.ts             # Demo data generator
-│   ├── engines/                # AI reasoning & execution engines
-│   │   ├── challenge-engine.ts # Adaptive challenge generator
-│   │   ├── change-engine.ts    # Change impact analyzer
-│   │   ├── competency-engine.ts# Competency graph generator
-│   │   ├── delta-engine.ts     # Learning delta calculator
-│   │   └── verification-engine.ts# Sandbox execution & evidence recorder
-│   ├── ingestion/              # Data collection services
-│   │   ├── brightdata.ts       # Bright Data proxy scraping client
-│   │   └── scraper.ts          # Fallback Cheerio HTML scraper
-│   ├── sandbox/                # Code execution runners
-│   │   └── piston.ts           # Piston remote API execution client
-│   ├── auth.ts                 # Better-auth configuration
-│   ├── groq.ts                 # Groq LLM client wrapper
-│   └── types.ts                # TypeScript interface definitions
-├── .bdata-scrapers.json        # Bright Data scraper zone mapping
-├── .env.example                # Environment variables template
-├── DESIGN.md                   # Terminal-native design specification
-└── package.json                # Project dependencies & scripts
+├── app/
+│   ├── (auth)/                 # sign-in, sign-up
+│   ├── (dashboard)/            # main app views
+│   │   ├── page.tsx            # home — cert input + course list
+│   │   ├── prep/               # cert prep hub
+│   │   ├── certifications/     # certification detail view
+│   │   ├── learn/              # objective lesson view
+│   │   ├── practice/           # practice questions
+│   │   ├── loop/               # study loop interface
+│   │   ├── alignment/          # readiness alignment
+│   │   └── settings/           # user settings
+│   ├── api/
+│   │   ├── auth/               # better-auth handlers
+│   │   ├── certifications/     # CRUD + stats + progress + graph
+│   │   ├── generate/           # blueprint scrape + course generation
+│   │   ├── objectives/         # lessons + questions + teaching
+│   │   ├── questions/          # question submission + grading
+│   │   ├── alignment/          # readiness scoring
+│   │   ├── alerts/             # user alerts
+│   │   ├── sources/            # content sources
+│   │   └── scrape/             # raw scrape endpoint
+│   └── _components/            # Sidebar, Navbar, Badge, Button, Card
+├── lib/
+│   ├── db/                     # SQLite schema, queries, seed
+│   ├── ingestion/              # Bright Data scraping client
+│   ├── auth.ts                 # Better Auth config
+│   ├── groq.ts                 # Groq client
+│   └── types.ts                # shared TypeScript types
+├── data/
+│   └── blueprints/             # local cert blueprint JSON files
+├── .env.example
+└── DESIGN.md                   # design system spec
 ```
 
 ---
 
-## ⚡ Quickstart Guide
+## getting started
 
-### Prerequisites
-- **Node.js**: `v20.x` or higher
-- **npm**: `v10.x` or higher
-- **Groq API Key**: Obtain from [Groq Console](https://console.groq.com/)
+### prerequisites
 
-### 1. Clone & Install
+- Node.js v20+
+- npm v10+
+- [Groq API key](https://console.groq.com/)
+- [Bright Data API key](https://brightdata.com/) (optional — falls back to Cheerio)
+
+### setup
+
 ```bash
-git clone https://github.com/devanshindepth/delta.git
+git clone https://github.com/yourusername/delta.git
 cd delta
 npm install
+cp .env.example .env
 ```
 
-### 2. Configure Environment Variables
-Copy `.env.example` to `.env.local` and add your API keys:
+Fill in `.env`:
 
-```bash
-cp .env.example .env.local
-```
-
-Edit `.env.local`:
 ```env
-GROQ_API_KEY=gsk_your_groq_api_key_here
-GROQ_MODEL=llama-3.3-70b-versatile
-BETTER_AUTH_SECRET=your_super_secret_auth_key
+GROQ_API_KEY=gsk_...
+GROQ_MODEL=openai/gpt-oss-120b
+BETTER_AUTH_SECRET=your_secret_here
 BETTER_AUTH_URL=http://localhost:3000
-BRIGHT_DATA_API_KEY=your_bright_data_api_key_here
+BRIGHT_DATA_API_KEY=...
 BRIGHT_DATA_ZONE=web_unlocker1
 ```
 
-### 3. Run Database Migrations & Seed Data (Optional)
+### seed the database (optional)
+
 ```bash
 npx tsx lib/db/seed.ts
 ```
 
-### 4. Launch Development Server
+### run
+
 ```bash
 npm run dev
 ```
 
-Visit [`http://localhost:3000`](http://localhost:3000) to open the Delta dashboard.
+Open [http://localhost:3000](http://localhost:3000).
 
 ---
 
-## 🧪 Testing & Quality Assurance
-
-Delta includes test scripts for verifying scrapers, API endpoints, and type checking:
+## scripts
 
 ```bash
-# Run TypeScript compilation check
-npx tsc --noEmit
-
-# Run unit & integration tests
-npm test
+npm run dev      # development server
+npm run build    # production build
+npm run lint     # eslint
+npm test         # run tests
 ```
 
 ---
 
-## 📜 API Reference Summary
+## license
 
-| Endpoint | Method | Description |
-|---|---|---|
-| `/api/goals` | `GET` / `POST` | List learning goals or initialize new goal graph |
-| `/api/competency` | `GET` | Retrieve nodes and edges for a competency graph |
-| `/api/changes` | `GET` / `POST` | Ingest URL and analyze technical change impact |
-| `/api/delta` | `GET` | Calculate current learning delta and effort hours |
-| `/api/challenges/[id]/submit` | `POST` | Execute user code in Piston sandbox and verify tests |
-| `/api/sources/[id]/ingest` | `POST` | Trigger Bright Data / Cheerio scraper on a source URL |
-| `/api/objectives/[id]/teach` | `POST` | Generate interactive Socratic lesson content |
-| `/api/objectives/[id]/question` | `GET` / `POST` | Generate or grade objective practice questions |
-
----
-
-## 📄 License
-
-Distributed under the MIT License. See `LICENSE` for more information.
-
----
-
-<p align="center">
-  <b>Delta</b> — Master the Delta of Technology.
-</p>
-
+This project is licensed under the [MIT License](LICENSE).

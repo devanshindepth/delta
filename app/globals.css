@@ -123,3 +123,10 @@ body {
   content: "[+] ";
   color: var(--mute);
 }
+
+/* Notes zone — hidden on screens narrower than 1024px */
+@media (max-width: 1023px) {
+  .notes-zone {
+    display: none !important;
+  }
+}

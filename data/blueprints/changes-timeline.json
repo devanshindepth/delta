@@ -1,0 +1,44 @@
+[
+  {
+    "id": "change-2025-01",
+    "certification_id": "cert-ai-103",
+    "exam_version_id": "exam-ver-ai103-v2",
+    "change_type": "blueprint_update",
+    "title": "Microsoft AI-103 Blueprint Major Refresh (v2.0-2025)",
+    "summary": "Mandatory migration to Conversational Language Understanding (CLU), Azure AI Search Vector/Hybrid retrieval, and Document Intelligence v3.1 API. Form Recognizer and LUIS content marked as deprecated.",
+    "affected_objectives": ["obj-202", "obj-302", "obj-402"],
+    "affected_services": ["Conversational Language Understanding", "Azure AI Search", "Document Intelligence"],
+    "official_changelog_url": "https://learn.microsoft.com/en-us/training/courses/ai-103t00#change-log",
+    "effective_date": "2025-01-15T00:00:00.000Z",
+    "severity": "breaking",
+    "detected_at": "2025-01-15T08:00:00.000Z"
+  },
+  {
+    "id": "change-2024-11",
+    "certification_id": "cert-ai-103",
+    "exam_version_id": "exam-ver-ai103-v2",
+    "change_type": "service_rename",
+    "title": "Cognitive Search Renamed to Azure AI Search with Semantic Ranker GA",
+    "summary": "Azure Cognitive Search officially rebranded to Azure AI Search. General availability of vector search, exhaustive KNN, and Semantic Ranker integration.",
+    "affected_objectives": ["obj-401", "obj-402"],
+    "affected_services": ["Azure AI Search", "Semantic Ranker"],
+    "official_changelog_url": "https://learn.microsoft.com/en-us/azure/search/whats-new",
+    "effective_date": "2024-11-20T00:00:00.000Z",
+    "severity": "major",
+    "detected_at": "2024-11-20T00:00:00.000Z"
+  },
+  {
+    "id": "change-2024-06",
+    "certification_id": "cert-ai-103",
+    "exam_version_id": "exam-ver-ai103-v2",
+    "change_type": "api_deprecation",
+    "title": "LUIS (Language Understanding) Full Sunset Announcement",
+    "summary": "LUIS runtime will be fully retired. All new conversational applications must target Azure AI Language Conversational Language Understanding (CLU).",
+    "affected_objectives": ["obj-302"],
+    "affected_services": ["LUIS", "CLU"],
+    "official_changelog_url": "https://learn.microsoft.com/en-us/azure/ai-services/language-service/conversational-language-understanding/luis-migration-guide",
+    "effective_date": "2024-06-01T00:00:00.000Z",
+    "severity": "breaking",
+    "detected_at": "2024-06-01T00:00:00.000Z"
+  }
+]

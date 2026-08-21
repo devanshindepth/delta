@@ -1,0 +1,545 @@
+{
+  "certification": {
+    "id": "cert-ai-103",
+    "code": "AI-103",
+    "title": "Building Cognitive Solutions with Microsoft Azure Services",
+    "provider": "Microsoft",
+    "official_url": "https://learn.microsoft.com/en-us/training/courses/ai-103t00",
+    "description": "Validates proficiency in architecting and implementing Azure Cognitive Services, Azure OpenAI, Document Intelligence, Computer Vision, and Conversational AI solutions.",
+    "created_at": "2025-01-01T00:00:00.000Z",
+    "updated_at": "2025-02-15T00:00:00.000Z"
+  },
+  "exam_versions": [
+    {
+      "id": "exam-ver-ai103-v2",
+      "certification_id": "cert-ai-103",
+      "version_code": "v2.0-2025",
+      "status": "active",
+      "release_date": "2025-01-15T00:00:00.000Z",
+      "retirement_date": null,
+      "change_summary": "Updated to Azure AI Studio, Conversational Language Understanding (CLU), Azure AI Search vector retrieval, and Document Intelligence v3.1."
+    },
+    {
+      "id": "exam-ver-ai103-v1",
+      "certification_id": "cert-ai-103",
+      "version_code": "v1.0-Legacy",
+      "status": "deprecated",
+      "release_date": "2023-03-01T00:00:00.000Z",
+      "retirement_date": "2024-12-31T00:00:00.000Z",
+      "change_summary": "Legacy blueprint featuring LUIS, Form Recognizer v2.1, QnA Maker, and Text Analytics v3.0."
+    }
+  ],
+  "blueprint_diff": {
+    "id": "diff-ai103-v1-to-v2",
+    "certification_id": "cert-ai-103",
+    "from_version": "v1.0-Legacy",
+    "to_version": "v2.0-2025",
+    "diff_date": "2025-01-15T00:00:00.000Z",
+    "added_objectives": [
+      "2.4 Integrate Azure AI Search Hybrid & Vector Retrieval",
+      "3.3 Implement Conversational Language Understanding (CLU)",
+      "4.3 Build Solutions using Azure OpenAI Service & Semantic Caching"
+    ],
+    "deprecated_objectives": [
+      "Legacy: Language Understanding Intelligent Service (LUIS) Authoring",
+      "Legacy: QnA Maker Knowledge Base Deployment",
+      "Legacy: Form Recognizer v2.1 Layout Models"
+    ],
+    "modified_objectives": [
+      {
+        "code": "2.2",
+        "title": "Extract Text and Key-Value Pairs with Document Intelligence",
+        "change_reason": "Form Recognizer renamed to Azure AI Document Intelligence; updated to REST API 2024-11-30 and prebuilt-layout v3.1"
+      },
+      {
+        "code": "3.1",
+        "title": "Analyze Text using Azure AI Language Service",
+        "change_reason": "Consolidated Text Analytics, Spell Check, and Translator under Azure AI Language SDK"
+      }
+    ],
+    "notes": "Courses teaching LUIS or QnA Maker are now classified as 🔴 Confirmed Outdated. Test-takers must use CLU and Azure AI Search with Vector Search."
+  },
+  "domains": [
+    {
+      "id": "dom-01",
+      "exam_version_id": "exam-ver-ai103-v2",
+      "domain_code": "DOM-01",
+      "title": "Analyze Solution Requirements & Cognitive Architecture",
+      "description": "Determine suitable Azure AI Services, security boundaries, authentication, network isolation, and telemetry.",
+      "weight_percentage_min": 20,
+      "weight_percentage_max": 25,
+      "sort_order": 1,
+      "objectives": [
+        {
+          "id": "obj-101",
+          "objective_code": "1.1",
+          "title": "Select Azure AI Service Tier and Deployment Architecture",
+          "description": "Choose between multi-service Azure AI resources vs single-service resources, provision serverless vs provisioned throughput units (PTU), and evaluate regional availability.",
+          "importance": "critical",
+          "freshness_status": "current",
+          "sort_order": 1,
+          "skills": [
+            {
+              "id": "skill-101-1",
+              "title": "Multi-Service vs Single-Service Resource Provisioning",
+              "description": "Evaluate unified endpoint billing versus isolated IAM boundaries.",
+              "official_doc_url": "https://learn.microsoft.com/en-us/azure/ai-services/multi-service-resource"
+            }
+          ]
+        },
+        {
+          "id": "obj-102",
+          "objective_code": "1.2",
+          "title": "Implement Security, Managed Identities & Keyless Auth",
+          "description": "Configure Azure RBAC, Microsoft Entra ID authentication, customer-managed keys (CMK), Virtual Networks, and Private Endpoints for AI resources.",
+          "importance": "critical",
+          "freshness_status": "current",
+          "sort_order": 2,
+          "skills": [
+            {
+              "id": "skill-102-1",
+              "title": "Authenticate with Azure Entra ID & DefaultAzureCredential",
+              "description": "Eliminate static subscription keys in production workloads using Azure Identity SDK.",
+              "official_doc_url": "https://learn.microsoft.com/en-us/azure/ai-services/authentication"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dom-02",
+      "exam_version_id": "exam-ver-ai103-v2",
+      "domain_code": "DOM-02",
+      "title": "Implement Computer Vision Solutions",
+      "description": "Extract visual features, detect objects, read printed/handwritten text with OCR, analyze faces ethically, and process forms with Document Intelligence.",
+      "weight_percentage_min": 20,
+      "weight_percentage_max": 25,
+      "sort_order": 2,
+      "objectives": [
+        {
+          "id": "obj-201",
+          "objective_code": "2.1",
+          "title": "Analyze Images with Azure AI Vision (Image Analysis 4.0)",
+          "description": "Generate dense captions, extract visual tags, detect objects with bounding boxes, smart-crop thumbnails, and moderate adult content.",
+          "importance": "high",
+          "freshness_status": "current",
+          "sort_order": 1,
+          "skills": [
+            {
+              "id": "skill-201-1",
+              "title": "Call Image Analysis 4.0 REST API & SDK",
+              "description": "Construct requests with visualFeatures (Caption, DenseCaptions, Objects, Read, Tags).",
+              "official_doc_url": "https://learn.microsoft.com/en-us/azure/ai-services/computer-vision/overview-image-analysis"
+            }
+          ]
+        },
+        {
+          "id": "obj-202",
+          "objective_code": "2.2",
+          "title": "Extract Text and Key-Value Pairs with Document Intelligence",
+          "description": "Deploy prebuilt models (invoice, receipt, ID document, layout) and train custom neural/template document models.",
+          "importance": "critical",
+          "freshness_status": "current",
+          "sort_order": 2,
+          "skills": [
+            {
+              "id": "skill-202-1",
+              "title": "Document Intelligence SDK (azure-ai-documentintelligence)",
+              "description": "Use AnalyzeDocumentOperation to parse high-resolution tables, selection marks, and structured key-value pairs.",
+              "official_doc_url": "https://learn.microsoft.com/en-us/azure/ai-services/document-intelligence/overview"
+            }
+          ]
+        },
+        {
+          "id": "obj-203",
+          "objective_code": "2.3",
+          "title": "Train and Deploy Custom Vision Models",
+          "description": "Implement classification (multiclass vs multilabel) and object detection models, optimize with transfer learning, export ONNX models for edge execution.",
+          "importance": "medium",
+          "freshness_status": "current",
+          "sort_order": 3,
+          "skills": [
+            {
+              "id": "skill-203-1",
+              "title": "Custom Vision Training & Prediction Workflow",
+              "description": "Tag images via SDK, trigger iterative training runs, and publish iteration prediction endpoints.",
+              "official_doc_url": "https://learn.microsoft.com/en-us/azure/ai-services/custom-vision-service/overview"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dom-03",
+      "exam_version_id": "exam-ver-ai103-v2",
+      "domain_code": "DOM-03",
+      "title": "Implement Natural Language Processing Solutions",
+      "description": "Detect sentiment, extract key phrases, recognize named entities, translate text, synthesize speech, and build conversational language understanding.",
+      "weight_percentage_min": 20,
+      "weight_percentage_max": 25,
+      "sort_order": 3,
+      "objectives": [
+        {
+          "id": "obj-301",
+          "objective_code": "3.1",
+          "title": "Analyze Text using Azure AI Language Service",
+          "description": "Extract Named Entity Recognition (NER), PII redaction, sentiment analysis, opinion mining, and key phrase extraction.",
+          "importance": "high",
+          "freshness_status": "current",
+          "sort_order": 1,
+          "skills": [
+            {
+              "id": "skill-301-1",
+              "title": "TextAnalyticsClient / TextAnalysisClient Implementation",
+              "description": "Construct multi-document batch analysis requests with language parameter and analyzeActions pipeline.",
+              "official_doc_url": "https://learn.microsoft.com/en-us/azure/ai-services/language-service/overview"
+            }
+          ]
+        },
+        {
+          "id": "obj-302",
+          "objective_code": "3.2",
+          "title": "Implement Conversational Language Understanding (CLU)",
+          "description": "Author intents, entities (learned, list, prebuilt), orchestrate with CLU orchestration workflows, and replace legacy LUIS models.",
+          "importance": "critical",
+          "freshness_status": "current",
+          "sort_order": 2,
+          "skills": [
+            {
+              "id": "skill-302-1",
+              "title": "CLU Project Authoring & Runtime Prediction",
+              "description": "Use ConversationAnalysisClient to predict topIntent and extracted entity components.",
+              "official_doc_url": "https://learn.microsoft.com/en-us/azure/ai-services/language-service/conversational-language-understanding/overview"
+            }
+          ]
+        },
+        {
+          "id": "obj-303",
+          "objective_code": "3.3",
+          "title": "Deploy Speech Recognition and Neural Text-to-Speech",
+          "description": "Implement Speech SDK for real-time speech-to-text, phrase lists for custom terminology, neural voice synthesis, and SSML styling.",
+          "importance": "medium",
+          "freshness_status": "current",
+          "sort_order": 3,
+          "skills": [
+            {
+              "id": "skill-303-1",
+              "title": "Azure Speech SDK Audio Streams & Synthesis",
+              "description": "Configure SpeechConfig, AudioConfig, and SpeechRecognizer for asynchronous push/pull streams.",
+              "official_doc_url": "https://learn.microsoft.com/en-us/azure/ai-services/speech-service/overview"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dom-04",
+      "exam_version_id": "exam-ver-ai103-v2",
+      "domain_code": "DOM-04",
+      "title": "Implement Knowledge Mining & Azure AI Search Solutions",
+      "description": "Design indexing pipelines, cognitive skillsets, enrichments, hybrid search (keyword + vector embeddings), and semantic ranking.",
+      "weight_percentage_min": 15,
+      "weight_percentage_max": 20,
+      "sort_order": 4,
+      "objectives": [
+        {
+          "id": "obj-401",
+          "objective_code": "4.1",
+          "title": "Design Indexing Architecture and Cognitive Skillsets",
+          "description": "Configure data sources, index definitions, cognitive skillset pipelines (OCR, entity recognition, split-skill), and indexers.",
+          "importance": "critical",
+          "freshness_status": "current",
+          "sort_order": 1,
+          "skills": [
+            {
+              "id": "skill-401-1",
+              "title": "Skillset Pipeline & Knowledge Store Projection",
+              "description": "Map document enrichment trees (`/document/merged_content/entities/*`) into index fields and table projections.",
+              "official_doc_url": "https://learn.microsoft.com/en-us/azure/search/cognitive-search-concept-intro"
+            }
+          ]
+        },
+        {
+          "id": "obj-402",
+          "objective_code": "4.2",
+          "title": "Implement Vector Search, Hybrid Querying & Semantic Reranking",
+          "description": "Index high-dimensional vector embeddings with HNSW / Exhaustive KNN algorithms, execute hybrid RRF queries, and apply semantic captions.",
+          "importance": "critical",
+          "freshness_status": "current",
+          "sort_order": 2,
+          "skills": [
+            {
+              "id": "skill-402-1",
+              "title": "VectorSearchConfiguration & SemanticRanking in SearchClient",
+              "description": "Formulate SearchOptions with VectorizedQuery and SemanticQuery parameters.",
+              "official_doc_url": "https://learn.microsoft.com/en-us/azure/search/vector-search-overview"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dom-05",
+      "exam_version_id": "exam-ver-ai103-v2",
+      "domain_code": "DOM-05",
+      "title": "Implement Conversational AI & Copilot Solutions",
+      "description": "Design dialogue flows, state management, middleware, multi-channel connectors, and integrate with Question Answering.",
+      "weight_percentage_min": 15,
+      "weight_percentage_max": 20,
+      "sort_order": 5,
+      "objectives": [
+        {
+          "id": "obj-501",
+          "objective_code": "5.1",
+          "title": "Build Multi-Turn Dialogs with Bot Framework SDK",
+          "description": "Manage UserState, ConversationState, WaterfallDialog steps, PromptValidators, and handle turn context interruptions.",
+          "importance": "high",
+          "freshness_status": "current",
+          "sort_order": 1,
+          "skills": [
+            {
+              "id": "skill-501-1",
+              "title": "Bot Framework State Management & Middleware",
+              "description": "Implement BotStateSet, MemoryStorage/CosmosDbPartitionedStorage, and TelemetryLoggerMiddleware.",
+              "official_doc_url": "https://learn.microsoft.com/en-us/azure/bot-service/bot-service-overview-introduction"
+            }
+          ]
+        },
+        {
+          "id": "obj-502",
+          "objective_code": "5.2",
+          "title": "Integrate Custom Question Answering with Active Learning",
+          "description": "Create knowledge bases from semi-structured URLs/files, configure multi-turn prompt follow-ups, and train active learning feedback loops.",
+          "importance": "high",
+          "freshness_status": "current",
+          "sort_order": 2,
+          "skills": [
+            {
+              "id": "skill-502-1",
+              "title": "Question Answering Authoring & QueryRuntime Client",
+              "description": "Replace legacy QnA Maker with Azure AI Language Question Answering REST endpoints.",
+              "official_doc_url": "https://learn.microsoft.com/en-us/azure/ai-services/language-service/question-answering/overview"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "practice_questions": [
+    {
+      "id": "q-101-mcq",
+      "objective_id": "obj-102",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "You are deploying a serverless Azure Function that calls Azure AI Document Intelligence. Your security team mandates that no API keys or connection strings be stored in code or configuration settings. Which configuration should you implement to satisfy this requirement?",
+      "options": [
+        {
+          "id": "opt-a",
+          "text": "Enable System-Assigned Managed Identity on the Azure Function and grant it the 'Cognitive Services User' RBAC role on the Document Intelligence resource.",
+          "explanation": "Correct. Managed Identity with DefaultAzureCredential eliminates static credentials completely."
+        },
+        {
+          "id": "opt-b",
+          "text": "Store the primary subscription key in Azure Key Vault and reference it using Key Vault secret references in App Settings.",
+          "explanation": "Incorrect. While Key Vault secures the key, it still relies on subscription keys rather than keyless Entra ID authentication."
+        },
+        {
+          "id": "opt-c",
+          "text": "Generate a Shared Access Signature (SAS) token with a 30-day expiration and inject it via environment variables.",
+          "explanation": "Incorrect. Document Intelligence does not authenticate via SAS tokens; it uses Entra ID or API keys."
+        },
+        {
+          "id": "opt-d",
+          "text": "Configure an IP firewall rule on Document Intelligence allowing only the outbound IP of the Azure Function.",
+          "explanation": "Incorrect. Network firewalls restrict access but do not handle identity or authentication."
+        }
+      ],
+      "correct_answer": "opt-a",
+      "explanation": "To achieve keyless authentication per Microsoft security baseline, assign a Managed Identity to the compute service and grant Azure RBAC ('Cognitive Services User' or 'Cognitive Services Document Intelligence User'). In code, instantiate DocumentIntelligenceClient with DefaultAzureCredential().",
+      "why_wrong": {
+        "opt-b": "Key Vault references still authenticate using static keys under the hood.",
+        "opt-c": "SAS tokens are used for Azure Storage access, not Cognitive Services direct endpoints.",
+        "opt-d": "Network rules are an additional defense-in-depth layer, not a replacement for authentication."
+      },
+      "official_doc_url": "https://learn.microsoft.com/en-us/azure/ai-services/authentication#authenticate-with-microsoft-entra-id",
+      "provenance": {
+        "source_url": "https://learn.microsoft.com/en-us/azure/ai-services/authentication",
+        "retrieved_at": "2025-02-15T00:00:00.000Z",
+        "source_type": "microsoft_learn",
+        "content_hash": "sha256:a9b8c7d6e5f41234",
+        "confidence": 1.0,
+        "insight_category": "VERIFIED"
+      },
+      "validation_status": "verified_accurate",
+      "service_tags": ["Azure AI Document Intelligence", "Managed Identity", "Entra ID"],
+      "created_at": "2025-02-15T00:00:00.000Z"
+    },
+    {
+      "id": "q-201-multi",
+      "objective_id": "obj-201",
+      "question_type": "multi_select",
+      "difficulty": "exam",
+      "stem": "You are building an image ingestion pipeline using the Azure AI Vision Image Analysis 4.0 API. You must detect objects in photos, obtain localized bounding boxes, and generate a natural language summary caption in a single API call. Which TWO visual features must you include in the `features` query parameter? (Select TWO)",
+      "options": [
+        { "id": "feat-a", "text": "Objects", "explanation": "Required to get physical object labels with bounding box pixel coordinates." },
+        { "id": "feat-b", "text": "Caption", "explanation": "Required to generate a concise English natural language description of the visual scene." },
+        { "id": "feat-c", "text": "Categories", "explanation": "Legacy 86-category taxonomy from Vision 3.2, superseded in Image Analysis 4.0." },
+        { "id": "feat-d", "text": "Faces", "explanation": "Detects human faces, but does not provide generic object bounding boxes or scene captions." },
+        { "id": "feat-e", "text": "Description", "explanation": "Legacy parameter from Vision 3.2, replaced by Caption in 4.0." }
+      ],
+      "correct_answer": ["feat-a", "feat-b"],
+      "explanation": "Image Analysis 4.0 features parameter accepts: Caption, DenseCaptions, Objects, Read, Tags, People, and SmartCrops. To fulfill the requirement of bounding boxes and summary captions, you must specify 'features=Objects,Caption'.",
+      "official_doc_url": "https://learn.microsoft.com/en-us/azure/ai-services/computer-vision/overview-image-analysis#features",
+      "provenance": {
+        "source_url": "https://learn.microsoft.com/en-us/azure/ai-services/computer-vision/overview-image-analysis",
+        "retrieved_at": "2025-02-15T00:00:00.000Z",
+        "source_type": "microsoft_learn",
+        "content_hash": "sha256:d8e7f6a5b4c39988",
+        "confidence": 1.0,
+        "insight_category": "VERIFIED"
+      },
+      "validation_status": "verified_accurate",
+      "service_tags": ["Azure AI Vision", "Image Analysis 4.0"],
+      "created_at": "2025-02-15T00:00:00.000Z"
+    },
+    {
+      "id": "q-301-ordering",
+      "objective_id": "obj-302",
+      "question_type": "ordering",
+      "difficulty": "exam",
+      "stem": "Place the following steps in the correct chronological order to create, train, and deploy a Conversational Language Understanding (CLU) model replacing a legacy LUIS app.",
+      "ordering_items": [
+        { "id": "ord-1", "text": "Create an Azure AI Language resource and open Language Studio.", "correct_order": 1 },
+        { "id": "ord-2", "text": "Create a Conversational Language Understanding project with primary utterance language.", "correct_order": 2 },
+        { "id": "ord-3", "text": "Define intents, learned entities, and label sample training utterances.", "correct_order": 3 },
+        { "id": "ord-4", "text": "Submit a training job and evaluate model metrics (F1 score, precision, recall).", "correct_order": 4 },
+        { "id": "ord-5", "text": "Deploy the trained model to a deployment slot (e.g., 'production') and query via ConversationAnalysisClient.", "correct_order": 5 }
+      ],
+      "correct_answer": ["ord-1", "ord-2", "ord-3", "ord-4", "ord-5"],
+      "explanation": "The standard lifecycle in Language Studio requires resource creation → project definition → schema & utterance labeling → training job execution → deployment to a slot for API consumption.",
+      "official_doc_url": "https://learn.microsoft.com/en-us/azure/ai-services/language-service/conversational-language-understanding/quickstart",
+      "provenance": {
+        "source_url": "https://learn.microsoft.com/en-us/azure/ai-services/language-service/conversational-language-understanding/quickstart",
+        "retrieved_at": "2025-02-15T00:00:00.000Z",
+        "source_type": "microsoft_learn",
+        "content_hash": "sha256:778899aabbccddeeff",
+        "confidence": 1.0,
+        "insight_category": "VERIFIED"
+      },
+      "validation_status": "verified_accurate",
+      "service_tags": ["Conversational Language Understanding", "Language Studio"],
+      "created_at": "2025-02-15T00:00:00.000Z"
+    },
+    {
+      "id": "q-401-matching",
+      "objective_id": "obj-402",
+      "question_type": "matching",
+      "difficulty": "exam",
+      "stem": "Match each Azure AI Search capability to its core functional description.",
+      "matching_pairs": [
+        { "id": "m-1", "premise": "Semantic Ranker", "match": "Deep learning model reranking top BM25/vector results using contextual relevance and extractive captions." },
+        { "id": "m-2", "premise": "Reciprocal Rank Fusion (RRF)", "match": "Algorithmic method combining ranked lists from keyword BM25 queries and vector KNN search into a single unified result." },
+        { "id": "m-3", "premise": "HNSW Algorithm", "match": "Hierarchical Navigable Small World graph indexing for fast approximate nearest neighbor vector retrieval." },
+        { "id": "m-4", "premise": "Knowledge Store", "match": "Storage container in Azure Blob/Table projecting enriched cognitive skillset documents for downstream analytics." }
+      ],
+      "correct_answer": {
+        "m-1": "Deep learning model reranking top BM25/vector results using contextual relevance and extractive captions.",
+        "m-2": "Algorithmic method combining ranked lists from keyword BM25 queries and vector KNN search into a single unified result.",
+        "m-3": "Hierarchical Navigable Small World graph indexing for fast approximate nearest neighbor vector retrieval.",
+        "m-4": "Storage container in Azure Blob/Table projecting enriched cognitive skillset documents for downstream analytics."
+      },
+      "explanation": "Semantic Ranker provides L2 reranking on top of L1 hybrid retrieval. RRF fuses vector + BM25 scores without requiring score normalization. HNSW builds high-dimensional graph indices.",
+      "official_doc_url": "https://learn.microsoft.com/en-us/azure/search/hybrid-search-overview",
+      "provenance": {
+        "source_url": "https://learn.microsoft.com/en-us/azure/search/hybrid-search-overview",
+        "retrieved_at": "2025-02-15T00:00:00.000Z",
+        "source_type": "microsoft_learn",
+        "content_hash": "sha256:1122334455667788",
+        "confidence": 1.0,
+        "insight_category": "VERIFIED"
+      },
+      "validation_status": "verified_accurate",
+      "service_tags": ["Azure AI Search", "Semantic Ranker", "Vector Search"],
+      "created_at": "2025-02-15T00:00:00.000Z"
+    },
+    {
+      "id": "q-501-case",
+      "objective_id": "obj-202",
+      "question_type": "case_study",
+      "difficulty": "exam",
+      "stem": "Review the case study scenario and select the most optimal Document Intelligence model and architecture.",
+      "case_study": {
+        "background": "Contoso Healthcare processes 500,000 medical claim PDF forms every month across 20 regional clinics. Each clinic uses varying multi-page layouts with check-boxes, physician signatures, and line-item billing tables.",
+        "technical_requirements": [
+          "Extract handwritten notes and check-box selections accurately",
+          "Parse variable tabular billing line items with column bounding coordinates",
+          "Maintain strict HIPAA compliance with zero data logging for model retraining"
+        ],
+        "constraints": [
+          "Processing latency must remain under 3 seconds per document",
+          "Must not require manual template creation for each clinic's visual layout"
+        ],
+        "existing_environment": "Azure API Management routing claims to backend Azure Functions with Managed Identities enabled."
+      },
+      "options": [
+        {
+          "id": "case-opt-a",
+          "text": "Deploy Document Intelligence with the prebuilt-layout model (`2024-11-30`), enable handwriting recognition, and set Customer-Managed Keys (CMK) with diagnostic logging disabled.",
+          "explanation": "Correct. Prebuilt-layout extracts tables, check-boxes (selection marks), and text without needing custom template models per clinic."
+        },
+        {
+          "id": "case-opt-b",
+          "text": "Train a custom template model for each of the 20 clinic layouts using 5 sample PDFs per clinic in Document Intelligence Studio.",
+          "explanation": "Incorrect. Violates the constraint requiring zero manual template maintenance per layout."
+        },
+        {
+          "id": "case-opt-c",
+          "text": "Use Azure AI Vision OCR (Read API) and implement regex pattern matching to reconstruct table rows in Python.",
+          "explanation": "Incorrect. Vision Read API returns raw lines/words without structural table or checkbox semantics."
+        },
+        {
+          "id": "case-opt-d",
+          "text": "Deploy Form Recognizer v2.1 invoice prebuilt model.",
+          "explanation": "Incorrect. Form Recognizer v2.1 is confirmed outdated, and invoice model does not cover specialized healthcare claim forms."
+        }
+      ],
+      "correct_answer": "case-opt-a",
+      "explanation": "Azure AI Document Intelligence prebuilt-layout is specifically engineered to extract text, tables, selection marks (checkboxes), and document structure across heterogeneous layouts without requiring manual training.",
+      "official_doc_url": "https://learn.microsoft.com/en-us/azure/ai-services/document-intelligence/concept-layout",
+      "provenance": {
+        "source_url": "https://learn.microsoft.com/en-us/azure/ai-services/document-intelligence/concept-layout",
+        "retrieved_at": "2025-02-15T00:00:00.000Z",
+        "source_type": "microsoft_learn",
+        "content_hash": "sha256:aabbcc1122334455",
+        "confidence": 1.0,
+        "insight_category": "VERIFIED"
+      },
+      "validation_status": "verified_accurate",
+      "service_tags": ["Document Intelligence", "Case Study", "HIPAA Compliance"],
+      "created_at": "2025-02-15T00:00:00.000Z"
+    },
+    {
+      "id": "q-601-sandbox",
+      "objective_id": "obj-301",
+      "question_type": "sandbox",
+      "difficulty": "exam",
+      "stem": "Complete the Python code using the official `azure-ai-textanalytics` SDK to analyze sentiment and redact Personally Identifiable Information (PII) from a customer support transcript using keyless DefaultAzureCredential.",
+      "sandbox_starter_code": "import os\nfrom azure.identity import DefaultAzureCredential\nfrom azure.ai.textanalytics import TextAnalyticsClient\n\ndef analyze_transcript(endpoint: str, text: str) -> dict:\n    # 1. Instantiate DefaultAzureCredential\n    credential = None # TODO\n    \n    # 2. Initialize TextAnalyticsClient\n    client = None # TODO\n    \n    # 3. Analyze sentiment\n    sentiment_result = client.analyze_sentiment([text])[0]\n    \n    # 4. Recognize and redact PII entities\n    pii_result = client.recognize_pii_entities([text])[0]\n    \n    return {\n        'sentiment': sentiment_result.sentiment,\n        'redacted_text': pii_result.redacted_text\n    }\n",
+      "sandbox_test_code": "def test_solution():\n    # Unit test validating correct client instantiation\n    pass\n",
+      "correct_answer": "credential = DefaultAzureCredential()\nclient = TextAnalyticsClient(endpoint=endpoint, credential=credential)",
+      "explanation": "To authenticate securely against Azure AI Language without static keys, initialize DefaultAzureCredential() and pass it into TextAnalyticsClient(endpoint=endpoint, credential=credential).",
+      "official_doc_url": "https://learn.microsoft.com/en-us/python/api/azure-ai-textanalytics/azure.ai.textanalytics.textanalyticsclient",
+      "provenance": {
+        "source_url": "https://learn.microsoft.com/en-us/python/api/azure-ai-textanalytics/azure.ai.textanalytics.textanalyticsclient",
+        "retrieved_at": "2025-02-15T00:00:00.000Z",
+        "source_type": "microsoft_learn",
+        "content_hash": "sha256:9988776655443322",
+        "confidence": 1.0,
+        "insight_category": "VERIFIED"
+      },
+      "validation_status": "verified_accurate",
+      "service_tags": ["Azure AI Language", "Python SDK", "DefaultAzureCredential"],
+      "created_at": "2025-02-15T00:00:00.000Z"
+    }
+  ]
+}

@@ -1,0 +1,754 @@
+{
+  "certification": {
+    "id": "cert-aws-saa",
+    "code": "SAA-C03",
+    "title": "AWS Solutions Architect Associate",
+    "provider": "Amazon Web Services",
+    "official_url": "https://aws.amazon.com/certification/certified-solutions-architect-associate/",
+    "description": "Design highly available, cost-effective, fault-tolerant, and scalable distributed systems on AWS."
+  },
+  "exam_versions": [
+    {
+      "id": "ver-aws-saa-c03",
+      "version_code": "SAA-C03",
+      "status": "active",
+      "release_date": "2022-08-30",
+      "change_summary": "Updated to include newer AWS services like AWS Global Accelerator and AWS DataSync."
+    }
+  ],
+  "domains": [
+    {
+      "id": "dom-aws-1",
+      "domain_code": "Domain 1",
+      "title": "Design Secure Architectures",
+      "description": "Design secure access to AWS resources, secure workloads and applications, and determine appropriate data security controls.",
+      "weight_percentage_min": 30,
+      "weight_percentage_max": 30,
+      "sort_order": 1,
+      "objectives": [
+        {
+          "id": "obj-aws-101",
+          "objective_code": "1.1",
+          "title": "Design secure access to AWS resources",
+          "description": "Determine when to choose between IAM users, groups, roles, and policies. Understand AWS IAM Identity Center (SSO), SCPs, and permission boundaries.",
+          "importance": "critical",
+          "freshness_status": "current",
+          "sort_order": 1
+        },
+        {
+          "id": "obj-aws-102",
+          "objective_code": "1.2",
+          "title": "Design secure workloads and applications",
+          "description": "Leverage VPC security groups, NACLs, AWS WAF, AWS Shield, AWS Secrets Manager, and AWS Certificate Manager to protect workloads.",
+          "importance": "critical",
+          "freshness_status": "current",
+          "sort_order": 2
+        },
+        {
+          "id": "obj-aws-103",
+          "objective_code": "1.3",
+          "title": "Determine appropriate data security controls",
+          "description": "Choose encryption at rest and in transit strategies. Understand S3 bucket policies, ACLs, and Block Public Access. Use KMS, CloudHSM, and Macie.",
+          "importance": "high",
+          "freshness_status": "current",
+          "sort_order": 3
+        }
+      ]
+    },
+    {
+      "id": "dom-aws-2",
+      "domain_code": "Domain 2",
+      "title": "Design Resilient Architectures",
+      "description": "Design scalable and loosely coupled architectures, highly available and fault-tolerant architectures.",
+      "weight_percentage_min": 26,
+      "weight_percentage_max": 26,
+      "sort_order": 2,
+      "objectives": [
+        {
+          "id": "obj-aws-201",
+          "objective_code": "2.1",
+          "title": "Design scalable and loosely coupled architectures",
+          "description": "Use SQS, SNS, EventBridge, and Step Functions to decouple components. Understand Lambda event sources, API Gateway, and ECS/EKS scaling patterns.",
+          "importance": "critical",
+          "freshness_status": "current",
+          "sort_order": 1
+        },
+        {
+          "id": "obj-aws-202",
+          "objective_code": "2.2",
+          "title": "Design highly available and fault-tolerant architectures",
+          "description": "Use Multi-AZ and Multi-Region deployments, ELB types, Route 53 routing policies, Auto Scaling groups, and RDS read replicas to achieve high availability.",
+          "importance": "critical",
+          "freshness_status": "current",
+          "sort_order": 2
+        },
+        {
+          "id": "obj-aws-203",
+          "objective_code": "2.3",
+          "title": "Select appropriate AWS storage solutions",
+          "description": "Choose between S3 storage classes, EBS volume types, EFS, FSx variants, and Storage Gateway. Understand lifecycle policies and intelligent-tiering.",
+          "importance": "high",
+          "freshness_status": "current",
+          "sort_order": 3
+        }
+      ]
+    },
+    {
+      "id": "dom-aws-3",
+      "domain_code": "Domain 3",
+      "title": "Design High-Performing Architectures",
+      "description": "Determine high-performing and elastic storage solutions, compute solutions, database solutions, and networking architectures.",
+      "weight_percentage_min": 24,
+      "weight_percentage_max": 24,
+      "sort_order": 3,
+      "objectives": [
+        {
+          "id": "obj-aws-301",
+          "objective_code": "3.1",
+          "title": "Determine high-performing and elastic storage solutions",
+          "description": "Select storage based on performance requirements: EBS (gp3, io2), S3 with Transfer Acceleration, EFS throughput modes, and CloudFront as a caching layer.",
+          "importance": "high",
+          "freshness_status": "current",
+          "sort_order": 1
+        },
+        {
+          "id": "obj-aws-302",
+          "objective_code": "3.2",
+          "title": "Design high-performing and elastic compute solutions",
+          "description": "Choose EC2 instance types, placement groups, Spot vs On-Demand vs Reserved vs Savings Plans. Use Auto Scaling and Lambda for elastic workloads.",
+          "importance": "high",
+          "freshness_status": "current",
+          "sort_order": 2
+        },
+        {
+          "id": "obj-aws-303",
+          "objective_code": "3.3",
+          "title": "Determine high-performing database solutions",
+          "description": "Select between RDS, Aurora, DynamoDB, ElastiCache (Redis vs Memcached), and Redshift based on use case. Understand read replicas vs Multi-AZ.",
+          "importance": "critical",
+          "freshness_status": "current",
+          "sort_order": 3
+        },
+        {
+          "id": "obj-aws-304",
+          "objective_code": "3.4",
+          "title": "Determine high-performing and scalable networking solutions",
+          "description": "Use CloudFront, Global Accelerator, Route 53 routing policies, VPC peering, PrivateLink, and Transit Gateway to design performant network architectures.",
+          "importance": "high",
+          "freshness_status": "current",
+          "sort_order": 4
+        }
+      ]
+    },
+    {
+      "id": "dom-aws-4",
+      "domain_code": "Domain 4",
+      "title": "Design Cost-Optimized Architectures",
+      "description": "Design cost-optimized storage, compute, database, and networking solutions.",
+      "weight_percentage_min": 20,
+      "weight_percentage_max": 20,
+      "sort_order": 4,
+      "objectives": [
+        {
+          "id": "obj-aws-401",
+          "objective_code": "4.1",
+          "title": "Design cost-optimized storage solutions",
+          "description": "Use S3 lifecycle policies, Intelligent-Tiering, Glacier, EBS snapshot management, and DataSync. Understand cost implications of S3 storage classes.",
+          "importance": "medium",
+          "freshness_status": "current",
+          "sort_order": 1
+        },
+        {
+          "id": "obj-aws-402",
+          "objective_code": "4.2",
+          "title": "Design cost-optimized compute solutions",
+          "description": "Compare EC2 pricing models (On-Demand, Reserved, Spot, Savings Plans). Use AWS Compute Optimizer and right-sizing recommendations.",
+          "importance": "high",
+          "freshness_status": "current",
+          "sort_order": 2
+        },
+        {
+          "id": "obj-aws-403",
+          "objective_code": "4.3",
+          "title": "Design cost-optimized database solutions",
+          "description": "Choose appropriate RDS instance classes, Aurora Serverless, DynamoDB on-demand vs provisioned, and ElastiCache tiering to minimize costs.",
+          "importance": "medium",
+          "freshness_status": "current",
+          "sort_order": 3
+        },
+        {
+          "id": "obj-aws-404",
+          "objective_code": "4.4",
+          "title": "Design cost-optimized network architectures",
+          "description": "Minimize data transfer costs using VPC endpoints, same-region transfers, and CloudFront. Understand NAT Gateway vs NAT instance cost tradeoffs.",
+          "importance": "medium",
+          "freshness_status": "current",
+          "sort_order": 4
+        }
+      ]
+    }
+  ],
+  "practice_questions": [
+    {
+      "id": "q-aws-001",
+      "objective_id": "obj-aws-101",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "A company requires that all IAM users must have MFA enabled before they can perform any AWS actions. Which approach should a Solutions Architect recommend?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "Enable 'Require MFA' in the root account settings to enforce MFA globally.",
+          "explanation": "There is no such global setting that automatically enforces MFA for all IAM users."
+        },
+        {
+          "id": "opt-2",
+          "text": "Attach an IAM policy to an 'AllUsers' group that denies all actions except IAM MFA management unless aws:MultiFactorAuthPresent is true.",
+          "explanation": "This is the AWS-recommended pattern. The policy denies everything except MFA self-enrollment actions unless MFA is present, effectively forcing users to set up MFA first."
+        },
+        {
+          "id": "opt-3",
+          "text": "Create an IAM role with MFA as a condition and assign all users to assume that role.",
+          "explanation": "Roles are assumed, not assigned permanently. This doesn't prevent users from acting without MFA on their base credentials."
+        },
+        {
+          "id": "opt-4",
+          "text": "Enable AWS Config rule 'iam-user-mfa-enabled' to automatically enforce MFA.",
+          "explanation": "AWS Config rules are detective controls — they report compliance but do not enforce or block actions."
+        }
+      ],
+      "correct_answer": "opt-2",
+      "explanation": "The correct pattern is a deny-all policy with an exception for MFA management actions, conditioned on aws:MultiFactorAuthPresent. This forces users to enroll MFA before they can do anything else.",
+      "official_doc_url": "https://docs.aws.amazon.com/IAM/latest/UserGuide/tutorial_users-self-manage-mfa-and-creds.html",
+      "service_tags": ["IAM"]
+    },
+    {
+      "id": "q-aws-002",
+      "objective_id": "obj-aws-101",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "A Solutions Architect needs to grant an EC2 instance permission to write objects to an S3 bucket without embedding credentials in the application code. What is the correct approach?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "Store AWS access keys in the EC2 instance's user data script.",
+          "explanation": "Embedding credentials in user data is a serious security risk — they are visible in the console and logs."
+        },
+        {
+          "id": "opt-2",
+          "text": "Create an IAM role with an S3 write policy, attach it as an instance profile to the EC2 instance.",
+          "explanation": "IAM roles for EC2 (via instance profiles) provide temporary, automatically-rotated credentials. This is the AWS-recommended approach."
+        },
+        {
+          "id": "opt-3",
+          "text": "Use AWS Secrets Manager to store the access keys and retrieve them at runtime.",
+          "explanation": "Secrets Manager is better than hardcoding, but IAM roles eliminate the need for long-term credentials entirely."
+        },
+        {
+          "id": "opt-4",
+          "text": "Attach an S3 bucket policy that allows all EC2 instances to write by IP range.",
+          "explanation": "IP-based policies are fragile and insecure — EC2 IPs can change and IP whitelisting is not a scalable access control mechanism."
+        }
+      ],
+      "correct_answer": "opt-2",
+      "explanation": "IAM instance profiles allow EC2 instances to assume a role and receive temporary credentials through the instance metadata service (IMDS). No long-term credentials are needed.",
+      "official_doc_url": "https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html",
+      "service_tags": ["IAM", "EC2", "S3"]
+    },
+    {
+      "id": "q-aws-003",
+      "objective_id": "obj-aws-102",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "An application runs on EC2 instances in a private subnet. The instances need to download software updates from the internet but must NOT be directly reachable from the internet. Which component enables this?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "Internet Gateway attached to the VPC",
+          "explanation": "An IGW alone doesn't restrict inbound traffic — instances with public IPs would be reachable. Private subnet instances don't have public IPs, but the IGW is still needed for the NAT Gateway."
+        },
+        {
+          "id": "opt-2",
+          "text": "NAT Gateway in a public subnet with a route from the private subnet",
+          "explanation": "A NAT Gateway provides outbound-only internet access for private subnet resources by translating their private IPs. Inbound connections are not established."
+        },
+        {
+          "id": "opt-3",
+          "text": "Egress-Only Internet Gateway",
+          "explanation": "Egress-Only IGW is for IPv6 traffic only. For IPv4 private subnet outbound access, a NAT Gateway is required."
+        },
+        {
+          "id": "opt-4",
+          "text": "VPC Endpoint for the internet",
+          "explanation": "VPC Endpoints are for connecting to AWS services privately, not general internet access."
+        }
+      ],
+      "correct_answer": "opt-2",
+      "explanation": "A NAT Gateway in a public subnet allows outbound IPv4 internet traffic from private subnet instances. It performs network address translation so responses can return, but no inbound connections can be initiated from the internet.",
+      "official_doc_url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html",
+      "service_tags": ["VPC", "NAT Gateway"]
+    },
+    {
+      "id": "q-aws-004",
+      "objective_id": "obj-aws-102",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "A web application is being targeted by SQL injection and cross-site scripting (XSS) attacks. The application runs behind an Application Load Balancer. Which AWS service should be added to protect against these attacks?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "AWS Shield Standard",
+          "explanation": "Shield Standard protects against DDoS attacks at the network and transport layers, not application-layer attacks like SQLi and XSS."
+        },
+        {
+          "id": "opt-2",
+          "text": "AWS WAF with managed rule groups",
+          "explanation": "AWS WAF is a web application firewall that can inspect HTTP(S) traffic for patterns matching SQLi, XSS, and other OWASP Top 10 threats. It integrates directly with ALB."
+        },
+        {
+          "id": "opt-3",
+          "text": "Security Groups with custom inbound rules",
+          "explanation": "Security groups operate at the network layer (IP/port) and cannot inspect HTTP request payloads for injection attacks."
+        },
+        {
+          "id": "opt-4",
+          "text": "Network Access Control Lists (NACLs)",
+          "explanation": "NACLs are stateless packet filters at the subnet level. They cannot inspect application-layer content."
+        }
+      ],
+      "correct_answer": "opt-2",
+      "explanation": "AWS WAF inspects HTTP/HTTPS requests at the application layer and can use managed rule groups (like the AWS Managed Rules Core Rule Set) to block SQLi, XSS, and other common web exploits. It integrates natively with ALB, CloudFront, and API Gateway.",
+      "official_doc_url": "https://docs.aws.amazon.com/waf/latest/developerguide/what-is-aws-waf.html",
+      "service_tags": ["WAF", "ALB", "Security"]
+    },
+    {
+      "id": "q-aws-005",
+      "objective_id": "obj-aws-103",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "A company stores sensitive customer data in S3. A compliance requirement mandates that all data be encrypted using customer-managed keys and that key usage be auditable. Which solution meets these requirements?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "Enable S3 default encryption using SSE-S3 (AES-256).",
+          "explanation": "SSE-S3 uses AWS-managed keys. There is no customer control over key management or rotation."
+        },
+        {
+          "id": "opt-2",
+          "text": "Enable S3 default encryption using SSE-KMS with a customer-managed KMS key.",
+          "explanation": "SSE-KMS with a CMK allows the customer to control key policies, rotation, and key usage is automatically logged in AWS CloudTrail."
+        },
+        {
+          "id": "opt-3",
+          "text": "Use client-side encryption before uploading to S3.",
+          "explanation": "Client-side encryption works but does not leverage AWS KMS for auditing and is more complex to manage."
+        },
+        {
+          "id": "opt-4",
+          "text": "Enable S3 default encryption using SSE-C with customer-provided keys.",
+          "explanation": "SSE-C requires the customer to manage and provide keys with every request. There is no key usage audit trail in CloudTrail for SSE-C."
+        }
+      ],
+      "correct_answer": "opt-2",
+      "explanation": "SSE-KMS with a customer-managed key (CMK) gives full control: you define key policies, enable automatic rotation, and every Encrypt/Decrypt call is logged in CloudTrail for a complete audit trail.",
+      "official_doc_url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingKMSEncryption.html",
+      "service_tags": ["S3", "KMS", "Security"]
+    },
+    {
+      "id": "q-aws-006",
+      "objective_id": "obj-aws-201",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "An order processing system receives bursts of orders that can overwhelm the backend processing service. The backend can only process 100 orders per minute. Which architecture decouples the ingestion from processing and handles the burst?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "Place an Application Load Balancer in front of the backend with connection draining enabled.",
+          "explanation": "An ALB distributes load but does not buffer or queue requests. Bursts exceeding backend capacity will still result in errors or dropped requests."
+        },
+        {
+          "id": "opt-2",
+          "text": "Write orders directly to an RDS database and have the backend poll for new records.",
+          "explanation": "Database polling is an anti-pattern — it creates lock contention and doesn't provide the durability and backpressure management of a proper queue."
+        },
+        {
+          "id": "opt-3",
+          "text": "Use Amazon SQS as a buffer. The ingestion tier pushes to SQS, and the backend consumes at its own pace.",
+          "explanation": "SQS decouples producers from consumers. Messages are durably stored until processed. The backend can scale independently and consume at 100 msg/min without dropping orders."
+        },
+        {
+          "id": "opt-4",
+          "text": "Use Amazon SNS to fan out orders to multiple backend instances.",
+          "explanation": "SNS is a pub/sub service for fan-out. It doesn't queue or buffer messages — if a subscriber is unavailable, the message is lost."
+        }
+      ],
+      "correct_answer": "opt-3",
+      "explanation": "SQS provides durable, scalable message buffering. During bursts, messages accumulate in the queue and the backend processes them at its own rate. This is the classic decoupling pattern for asynchronous workloads.",
+      "official_doc_url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html",
+      "service_tags": ["SQS", "Decoupling"]
+    },
+    {
+      "id": "q-aws-007",
+      "objective_id": "obj-aws-202",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "A company runs a MySQL database on RDS. They need the database to automatically recover from an Availability Zone failure with minimal data loss and minimal downtime. Which feature should be enabled?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "RDS Read Replica in a different AZ",
+          "explanation": "Read replicas use asynchronous replication and are primarily for read scaling. Failover to a read replica requires manual intervention and can result in data loss."
+        },
+        {
+          "id": "opt-2",
+          "text": "RDS Multi-AZ deployment",
+          "explanation": "Multi-AZ maintains a synchronous standby replica in a different AZ. On failure, RDS automatically fails over to the standby with minimal data loss (synchronous replication) and typically under 2 minutes of downtime."
+        },
+        {
+          "id": "opt-3",
+          "text": "Enable automated backups with a 1-day retention period",
+          "explanation": "Automated backups allow point-in-time restore but require significant downtime to restore and cannot provide fast automatic failover."
+        },
+        {
+          "id": "opt-4",
+          "text": "Create a manual DB snapshot every hour",
+          "explanation": "Snapshots are for backup/restore, not for automatic failover. Restoring from a snapshot takes significant time."
+        }
+      ],
+      "correct_answer": "opt-2",
+      "explanation": "RDS Multi-AZ creates a synchronous standby replica in a different AZ. AWS automatically fails over to the standby during AZ failure, instance failure, or maintenance — no application changes needed. The DNS endpoint is automatically updated.",
+      "official_doc_url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html",
+      "service_tags": ["RDS", "High Availability"]
+    },
+    {
+      "id": "q-aws-008",
+      "objective_id": "obj-aws-202",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "A global application needs to route users to the nearest healthy AWS region. If the primary region becomes unhealthy, traffic should automatically failover to the secondary region. Which Route 53 routing policy should be used?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "Simple routing",
+          "explanation": "Simple routing returns a single record with no health checking or failover logic."
+        },
+        {
+          "id": "opt-2",
+          "text": "Weighted routing",
+          "explanation": "Weighted routing distributes traffic by percentage. It doesn't automatically failover based on health checks."
+        },
+        {
+          "id": "opt-3",
+          "text": "Latency-based routing combined with Route 53 Health Checks and Failover routing",
+          "explanation": "Latency-based routing directs users to the lowest-latency region. Combined with health checks and failover, it removes unhealthy endpoints. However, active-passive failover between just two regions uses Failover routing policy directly."
+        },
+        {
+          "id": "opt-4",
+          "text": "Failover routing with health checks on the primary record",
+          "explanation": "Route 53 Failover routing designates one record as primary and one as secondary. With health checks, Route 53 automatically serves the secondary when the primary is unhealthy."
+        }
+      ],
+      "correct_answer": "opt-4",
+      "explanation": "Route 53 Failover routing with health checks creates an active-passive configuration. Route 53 monitors the primary endpoint and automatically routes to the secondary (failover) record when the primary health check fails.",
+      "official_doc_url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-failover.html",
+      "service_tags": ["Route 53", "High Availability"]
+    },
+    {
+      "id": "q-aws-009",
+      "objective_id": "obj-aws-203",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "A media company stores video files that are frequently accessed for the first 30 days after upload, then accessed roughly once a month for 6 months, and finally rarely accessed thereafter. Which S3 storage class configuration minimizes cost while maintaining availability?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "Store all files in S3 Standard permanently.",
+          "explanation": "S3 Standard is the most expensive for long-term storage of infrequently accessed data."
+        },
+        {
+          "id": "opt-2",
+          "text": "Use S3 Intelligent-Tiering for all objects.",
+          "explanation": "Intelligent-Tiering works but has a monitoring charge per object. For predictable access patterns, lifecycle policies are more cost-effective."
+        },
+        {
+          "id": "opt-3",
+          "text": "Use a lifecycle policy: Standard for 0-30 days → Standard-IA for 30-180 days → Glacier Flexible Retrieval after 180 days.",
+          "explanation": "This matches the described access pattern. Standard-IA costs less than Standard for infrequent access. Glacier is low-cost archival for the rarely-accessed phase."
+        },
+        {
+          "id": "opt-4",
+          "text": "Store files in S3 One Zone-IA from day one.",
+          "explanation": "One Zone-IA stores data in a single AZ and is cheaper, but it lacks the redundancy needed for valuable media assets and incurs retrieval fees."
+        }
+      ],
+      "correct_answer": "opt-3",
+      "explanation": "S3 lifecycle policies automate transitions between storage classes based on object age. Standard → Standard-IA → Glacier matches the stated pattern and minimizes cost. Standard-IA charges a retrieval fee but has lower storage costs for objects accessed less than monthly.",
+      "official_doc_url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html",
+      "service_tags": ["S3", "Cost Optimization"]
+    },
+    {
+      "id": "q-aws-010",
+      "objective_id": "obj-aws-301",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "An application requires a shared file system that can be simultaneously mounted on hundreds of Linux EC2 instances across multiple Availability Zones with consistent performance. Which storage solution should be used?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "Amazon EBS gp3 volume shared across instances",
+          "explanation": "EBS volumes can only be attached to a single EC2 instance at a time (except io2 Multi-Attach, which has significant limitations and is not designed for general shared storage)."
+        },
+        {
+          "id": "opt-2",
+          "text": "Amazon S3 with a FUSE-based mount",
+          "explanation": "S3 is object storage and is not a true POSIX file system. Latency and consistency semantics differ from a file system."
+        },
+        {
+          "id": "opt-3",
+          "text": "Amazon EFS (Elastic File System)",
+          "explanation": "EFS is a fully managed NFS file system that can be mounted concurrently by thousands of EC2 instances across multiple AZs in the same region. It scales automatically and supports POSIX semantics."
+        },
+        {
+          "id": "opt-4",
+          "text": "Amazon FSx for Windows File Server",
+          "explanation": "FSx for Windows is an SMB-based file system for Windows workloads, not Linux NFS clients."
+        }
+      ],
+      "correct_answer": "opt-3",
+      "explanation": "Amazon EFS provides a scalable, fully managed NFS file system for Linux. Multiple EC2 instances across AZs can mount the same EFS file system concurrently with strong consistency. It's ideal for shared content, configuration files, and data lakes.",
+      "official_doc_url": "https://docs.aws.amazon.com/efs/latest/ug/whatisefs.html",
+      "service_tags": ["EFS", "Storage"]
+    },
+    {
+      "id": "q-aws-011",
+      "objective_id": "obj-aws-302",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "A batch processing job needs to run for up to 6 hours and can be interrupted. The workload is fault-tolerant and designed to checkpoint its progress. Which EC2 pricing model minimizes cost?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "On-Demand Instances",
+          "explanation": "On-Demand is the most flexible but most expensive option. There are no savings for interruptible workloads."
+        },
+        {
+          "id": "opt-2",
+          "text": "Reserved Instances (1-year, All Upfront)",
+          "explanation": "Reserved Instances require a 1-year commitment and are best for steady-state workloads. Batch jobs run only occasionally — Reserved Instances would result in wasted capacity."
+        },
+        {
+          "id": "opt-3",
+          "text": "Spot Instances",
+          "explanation": "Spot Instances use spare EC2 capacity at up to 90% discount. They can be interrupted with 2-minute notice, making them ideal for fault-tolerant, checkpointing batch workloads."
+        },
+        {
+          "id": "opt-4",
+          "text": "Dedicated Hosts",
+          "explanation": "Dedicated Hosts are the most expensive option and are used for licensing compliance, not cost savings."
+        }
+      ],
+      "correct_answer": "opt-3",
+      "explanation": "Spot Instances provide the largest discount for EC2 compute. Since the workload checkpoints progress and can tolerate interruptions, it can resume after an interruption with minimal work lost. This is the primary use case for Spot Instances.",
+      "official_doc_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-spot-instances.html",
+      "service_tags": ["EC2", "Spot", "Cost Optimization"]
+    },
+    {
+      "id": "q-aws-012",
+      "objective_id": "obj-aws-303",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "A gaming leaderboard application requires single-digit millisecond read latency at any scale, with the ability to handle millions of requests per second. The data access pattern is simple key-value lookups with no complex joins. Which database service should be used?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "Amazon RDS for MySQL with read replicas",
+          "explanation": "RDS is a relational database. While read replicas help, RDS cannot scale to millions of requests per second with single-digit millisecond latency at that scale."
+        },
+        {
+          "id": "opt-2",
+          "text": "Amazon DynamoDB",
+          "explanation": "DynamoDB is a fully managed NoSQL key-value and document database delivering single-digit millisecond performance at any scale. It handles millions of requests per second and scales automatically."
+        },
+        {
+          "id": "opt-3",
+          "text": "Amazon Redshift",
+          "explanation": "Redshift is a data warehouse optimized for analytical (OLAP) queries, not high-throughput transactional key-value operations."
+        },
+        {
+          "id": "opt-4",
+          "text": "Amazon ElastiCache for Memcached",
+          "explanation": "ElastiCache is an in-memory cache, not a primary database. It's used to cache frequently read data from a primary database, not as the source of truth."
+        }
+      ],
+      "correct_answer": "opt-2",
+      "explanation": "DynamoDB is purpose-built for high-scale, low-latency key-value workloads. With its built-in horizontal scaling and DAX (in-memory acceleration), it achieves consistent single-digit millisecond latency at any scale without operational overhead.",
+      "official_doc_url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Introduction.html",
+      "service_tags": ["DynamoDB", "NoSQL"]
+    },
+    {
+      "id": "q-aws-013",
+      "objective_id": "obj-aws-303",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "A web application uses RDS PostgreSQL. The read load is 10x the write load, and read queries are causing performance degradation on the primary instance. What is the correct AWS solution?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "Enable RDS Multi-AZ to distribute read traffic across primary and standby.",
+          "explanation": "Multi-AZ standby instances do NOT serve read traffic. They are only for automatic failover. The standby is not accessible for reads."
+        },
+        {
+          "id": "opt-2",
+          "text": "Create one or more RDS Read Replicas and direct read traffic to them.",
+          "explanation": "Read Replicas use asynchronous replication to maintain copies of the primary database that can serve read traffic, offloading the primary for writes."
+        },
+        {
+          "id": "opt-3",
+          "text": "Increase the RDS instance size to handle all traffic.",
+          "explanation": "Scaling up (vertical scaling) provides temporary relief but is not cost-effective for read-heavy workloads and has limits."
+        },
+        {
+          "id": "opt-4",
+          "text": "Migrate to DynamoDB to handle the read load.",
+          "explanation": "Migrating to a different database type is a major architectural change and is not the correct immediate solution for a read-heavy relational workload."
+        }
+      ],
+      "correct_answer": "opt-2",
+      "explanation": "RDS Read Replicas are specifically designed to offload read traffic from the primary instance. Applications point read queries to the replica endpoint. You can create up to 15 Read Replicas for MySQL/PostgreSQL. Note: Multi-AZ standby does NOT serve reads.",
+      "official_doc_url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ReadRepl.html",
+      "service_tags": ["RDS", "Read Replicas"]
+    },
+    {
+      "id": "q-aws-014",
+      "objective_id": "obj-aws-304",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "A company has multiple VPCs in different AWS accounts and needs them to communicate privately without traffic traversing the internet. The number of VPCs will grow over time. Which networking solution best scales to this requirement?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "VPC Peering between each pair of VPCs",
+          "explanation": "VPC peering is not transitive and doesn't scale. With N VPCs, you need N*(N-1)/2 peering connections. Managing hundreds of peering connections is operationally complex."
+        },
+        {
+          "id": "opt-2",
+          "text": "AWS Transit Gateway",
+          "explanation": "Transit Gateway acts as a regional network hub. You attach multiple VPCs and on-premises networks to the Transit Gateway, which handles routing. It supports thousands of attachments and is transitive by default."
+        },
+        {
+          "id": "opt-3",
+          "text": "AWS Direct Connect for each VPC",
+          "explanation": "Direct Connect is for on-premises to AWS connectivity, not for VPC-to-VPC communication."
+        },
+        {
+          "id": "opt-4",
+          "text": "Create a single large VPC and merge all workloads into it",
+          "explanation": "Consolidating workloads into one VPC is not scalable for a multi-account, multi-team organization and violates security boundaries."
+        }
+      ],
+      "correct_answer": "opt-2",
+      "explanation": "AWS Transit Gateway is a scalable hub-and-spoke network architecture that allows VPCs and on-premises networks to connect through a single gateway. Unlike VPC peering, it is transitive and supports route table management across thousands of attachments.",
+      "official_doc_url": "https://docs.aws.amazon.com/vpc/latest/tgw/what-is-transit-gateway.html",
+      "service_tags": ["Transit Gateway", "VPC", "Networking"]
+    },
+    {
+      "id": "q-aws-015",
+      "objective_id": "obj-aws-401",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "A company stores compliance logs in S3. Logs must be immediately accessible for 90 days, then retained for 7 years in a low-cost archive where retrieval within 12 hours is acceptable. Which S3 lifecycle configuration achieves this at the lowest cost?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "S3 Standard for 0-90 days, then transition to S3 Glacier Deep Archive.",
+          "explanation": "Glacier Deep Archive is the lowest-cost S3 storage class, with 12-hour retrieval SLA. This matches the requirement perfectly."
+        },
+        {
+          "id": "opt-2",
+          "text": "S3 Standard for 0-90 days, then transition to S3 Glacier Instant Retrieval.",
+          "explanation": "Glacier Instant Retrieval has millisecond access times, which exceeds the requirement. It costs more than Glacier Deep Archive."
+        },
+        {
+          "id": "opt-3",
+          "text": "S3 Standard-IA for 0-90 days, then transition to S3 One Zone-IA.",
+          "explanation": "Standard-IA and One Zone-IA are not archival tiers. One Zone-IA stores data in a single AZ and isn't suitable for long-term compliance data."
+        },
+        {
+          "id": "opt-4",
+          "text": "Keep all data in S3 Standard with Object Lock enabled.",
+          "explanation": "Object Lock prevents deletion but doesn't reduce storage costs. Keeping all data in Standard for 7 years is expensive."
+        }
+      ],
+      "correct_answer": "opt-1",
+      "explanation": "S3 Glacier Deep Archive is the lowest cost AWS storage, designed for data accessed less than once a year with a 12-hour retrieval time. It's ideal for long-term compliance archives. Standard provides immediate access for the first 90 days.",
+      "official_doc_url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html#sc-glacier-deep-archive",
+      "service_tags": ["S3", "Glacier", "Cost Optimization"]
+    },
+    {
+      "id": "q-aws-016",
+      "objective_id": "obj-aws-402",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "A production application runs consistently on 10 EC2 instances 24/7 with a steady workload. The company wants to commit to reducing costs over the next 3 years and doesn't plan to change instance families. Which purchasing option provides the greatest discount?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "On-Demand Instances",
+          "explanation": "On-Demand has no discount and is the most expensive option for steady-state workloads."
+        },
+        {
+          "id": "opt-2",
+          "text": "Compute Savings Plans (3-year)",
+          "explanation": "Compute Savings Plans offer up to 66% discount with flexibility to change instance family, size, OS, and Region."
+        },
+        {
+          "id": "opt-3",
+          "text": "Standard Reserved Instances (3-year, All Upfront)",
+          "explanation": "Standard Reserved Instances with 3-year All Upfront commitment provide up to 72% discount — the highest available for EC2. They're ideal when the instance family is known and won't change."
+        },
+        {
+          "id": "opt-4",
+          "text": "Convertible Reserved Instances (3-year, All Upfront)",
+          "explanation": "Convertible RIs allow changing instance family but provide a lower maximum discount (~54%) compared to Standard RIs."
+        }
+      ],
+      "correct_answer": "opt-3",
+      "explanation": "Standard Reserved Instances with a 3-year All Upfront payment provide the maximum discount (up to 72%) for EC2. When the workload is steady and the instance family is fixed, Standard RIs offer more savings than Savings Plans or Convertible RIs.",
+      "official_doc_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-reserved-instances.html",
+      "service_tags": ["EC2", "Reserved Instances", "Cost Optimization"]
+    },
+    {
+      "id": "q-aws-017",
+      "objective_id": "obj-aws-404",
+      "question_type": "mcq",
+      "difficulty": "exam",
+      "stem": "An application in a private subnet needs to access Amazon S3 without traffic going over the internet, and without incurring NAT Gateway data processing charges. What is the most cost-effective solution?",
+      "options": [
+        {
+          "id": "opt-1",
+          "text": "Use a NAT Gateway to route S3 traffic",
+          "explanation": "NAT Gateway charges $0.045/GB for data processing. For high-volume S3 traffic, this cost can be significant."
+        },
+        {
+          "id": "opt-2",
+          "text": "Create a Gateway VPC Endpoint for S3",
+          "explanation": "A Gateway VPC Endpoint for S3 routes traffic directly from the VPC to S3 through the AWS network without traversing the internet. Gateway endpoints are free — no data processing charges."
+        },
+        {
+          "id": "opt-3",
+          "text": "Use an Interface VPC Endpoint for S3",
+          "explanation": "Interface endpoints work but incur hourly charges per AZ plus data processing fees. For S3, Gateway endpoints are free and preferred."
+        },
+        {
+          "id": "opt-4",
+          "text": "Assign a public IP to the EC2 instance and route S3 traffic directly",
+          "explanation": "Giving private instances public IPs exposes them to the internet, violating the security requirement."
+        }
+      ],
+      "correct_answer": "opt-2",
+      "explanation": "Gateway VPC Endpoints for S3 and DynamoDB are free. They route traffic through the AWS private network, eliminating internet exposure and NAT Gateway data processing charges. You add the endpoint to your route table and traffic automatically uses it.",
+      "official_doc_url": "https://docs.aws.amazon.com/vpc/latest/privatelink/vpc-endpoints-s3.html",
+      "service_tags": ["VPC Endpoints", "S3", "Cost Optimization"]
+    }
+  ]
+}
