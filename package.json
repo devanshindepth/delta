@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test tests/**/*.test.ts"
+    "test": "tsx --test tests/**/*.test.ts lib/**/*.test.ts"
   },
   "dependencies": {
     "@brightdata/sdk": "^1.2.0",
