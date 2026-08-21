@@ -227,6 +227,8 @@ export function upsertLearnerProgress(
 
   if (!existing) {
     const id = `prog-${userId}-${objectiveId}-${Date.now()}`;
+    const masteryScore = isCorrect ? 1.0 : 0.0;
+    const status = isCorrect ? "mastered" : "needs_review";
     db.prepare(`
       INSERT INTO learner_progress (id, user_id, objective_id, status, attempts, correct_count, last_attempted_at, mastery_score)
       VALUES (?, ?, ?, ?, 1, ?, ?, ?)
@@ -234,21 +236,21 @@ export function upsertLearnerProgress(
       id,
       userId,
       objectiveId,
-      isCorrect ? "in_progress" : "in_progress",
+      status,
       isCorrect ? 1 : 0,
       now,
-      isCorrect ? 0.5 : 0.0
+      masteryScore
     );
   } else {
     const newAttempts = existing.attempts + 1;
     const newCorrect = existing.correct_count + (isCorrect ? 1 : 0);
     const masteryScore = newCorrect / newAttempts;
     const status =
-      masteryScore >= 0.8 && newAttempts >= 3
+      masteryScore >= 0.8
         ? "mastered"
         : masteryScore >= 0.5
         ? "in_progress"
-        : "in_progress";
+        : "needs_review";
 
     db.prepare(`
       UPDATE learner_progress
