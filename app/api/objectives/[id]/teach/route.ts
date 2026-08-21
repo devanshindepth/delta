@@ -103,22 +103,13 @@ export async function GET(
            error: "extraction_failed", 
            reason: "missing_scrape_metadata", 
            user_message: "An internal error occurred while verifying the source. Please try again.",
-           scrape_status: scrapeResult.scrape_status 
          },
          { status: 422 }
        );
     }
 
-    if (
-      scrapeResult.scrape_status.outcome === "failed" ||
-      !scrapeResult.scrape_status.path ||
-      scrapeResult.scrape_status.healed === undefined ||
-      !scrapeResult.scrape_status.source_url
-    ) {
-      let reason = scrapeResult.scrape_status?.failure_reason || "missing_scrape_metadata";
-      if (!scrapeResult.scrape_status.path || scrapeResult.scrape_status.healed === undefined || !scrapeResult.scrape_status.source_url) {
-        reason = "missing_scrape_metadata";
-      }
+    if (scrapeResult.scrape_status.outcome === "failed") {
+      const reason = scrapeResult.scrape_status?.failure_reason || "missing_scrape_metadata";
       
       const userMessageMap: Record<string, string> = {
         no_official_url_found: "We couldn't find official documentation for this topic right now.",

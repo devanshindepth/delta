@@ -206,10 +206,18 @@ export function deriveUrlFromProvider(
   
   let domain = "";
   if (lowerProvider.includes("microsoft")) domain = "learn.microsoft.com";
-  else if (lowerProvider.includes("aws")) domain = "docs.aws.amazon.com";
+  else if (lowerProvider.includes("aws") || lowerProvider.includes("amazon")) domain = "docs.aws.amazon.com";
   else if (lowerProvider.includes("gcp") || lowerProvider.includes("google")) domain = "cloud.google.com";
   else if (lowerProvider.includes("hashicorp")) domain = "developer.hashicorp.com";
   else if (lowerProvider.includes("docker")) domain = "docs.docker.com";
+  else if (lowerProvider.includes("databricks")) domain = "docs.databricks.com";
+  else if (lowerProvider.includes("snowflake")) domain = "docs.snowflake.com";
+  else if (lowerProvider.includes("oracle")) domain = "docs.oracle.com";
+  else if (lowerProvider.includes("kubernetes") || lowerProvider.includes("cncf")) domain = "kubernetes.io";
+  else if (lowerProvider.includes("github")) domain = "docs.github.com";
+  else if (lowerProvider.includes("salesforce")) domain = "developer.salesforce.com";
+  else if (lowerProvider.includes("confluent")) domain = "docs.confluent.io";
+  else if (lowerProvider.includes("red hat") || lowerProvider.includes("redhat")) domain = "docs.redhat.com";
   else return null;
 
   const slug = objectiveTitle.toLowerCase().replace(/ /g, "+");
@@ -447,40 +455,188 @@ export function normalizeExtractionResult(raw: any): ExtractionResult {
   };
 }
 
-async function scrapeDocUrl(url: string, objectiveTitle: string): Promise<ExtractionResult> {
-  const hostname = new URL(url).hostname;
-  let collectorId = getCollectorId(hostname, "doc_content");
+/**
+ * Use `brightdata discover` (AI-powered web discovery) to find and fetch the
+ * best official documentation page for an objective topic on a given domain.
+ * Returns { url, content } if found, null otherwise.
+ *
+ * We use `discover` instead of `search` because:
+ * - It uses AI to rank results by relevance intent, not just keyword match
+ * - `--include-content` fetches the full page markdown in one call, eliminating
+ *   the separate `bdata scrape` step entirely
+ * - It handles JS-rendered SPAs better than the basic search command
+ */
+async function discoverDocContent(
+  objectiveTitle: string,
+  domain: string,
+  certTitle?: string
+): Promise<{ url: string; content: string } | null> {
+  const query = certTitle
+    ? `${objectiveTitle} ${certTitle}`
+    : objectiveTitle;
 
-  if (!collectorId) {
-    const prompt = buildDocContentPrompt(objectiveTitle);
-    const out = await runBDataCli(["scraper", "create", url, prompt, "--json"], 420_000);
-    let res: any;
+  const intent = `Find the official ${domain} documentation page that best explains: ${objectiveTitle}. Prefer deep technical reference pages over search results or index pages.`;
+
+  console.info(`[bdata-studio] Discovering doc for: ${query} on ${domain}`);
+
+  let out: string;
+  try {
+    out = await runBDataCli(
+      [
+        "discover", query,
+        "--intent", intent,
+        "--filter-keywords", domain,
+        "--num-results", "3",
+        "--include-content",
+        "--json",
+      ],
+      90_000
+    );
+  } catch (err: any) {
+    console.warn(`[bdata-studio] discover failed: ${err.message}`);
+    return null;
+  }
+
+  if (!out || out.trim().length < 10) return null;
+
+  try {
+    const parsed = JSON.parse(out);
+    const results: any[] = Array.isArray(parsed)
+      ? parsed
+      : parsed.results || parsed.items || parsed.data || [];
+
+    for (const r of results) {
+      const url: string = r?.url || r?.link || r?.href || "";
+      const content: string = r?.content || r?.markdown || r?.text || r?.body || "";
+      if (
+        url &&
+        url.includes(domain) &&
+        !url.includes("/search") &&
+        !url.includes("?q=") &&
+        content.trim().length > 200
+      ) {
+        console.info(`[bdata-studio] Found doc via discover: ${url}`);
+        return { url, content };
+      }
+    }
+  } catch {
+    console.warn(`[bdata-studio] Could not parse discover results (first 300 chars): ${out.substring(0, 300)}`);
+  }
+  return null;
+}
+
+/**
+ * Fetch a page's content via Bright Data Web Unlocker (`brightdata scrape`).
+ * Returns raw markdown content. Throws on CLI failure or empty response.
+ */
+async function fetchWithWebUnlocker(url: string): Promise<string> {
+  const out = await runBDataCli(
+    ["scrape", url, "--format", "markdown"],
+    60_000
+  );
+
+  if (!out || out.trim().length < 50) {
+    throw new Error("scraper_run_failed");
+  }
+
+  // If the CLI returned JSON wrapping markdown content, unwrap it
+  try {
+    const parsed = JSON.parse(out);
+    if (parsed && typeof parsed.content === "string" && parsed.content.trim().length > 50) {
+      return parsed.content;
+    }
+  } catch {
+    // Not JSON — output is raw markdown, use as-is
+  }
+
+  return out;
+}
+
+/**
+ * Given raw page content (markdown/text), call Groq to extract the canonical
+ * ExtractionResult schema.
+ */
+async function extractFromRawContent(
+  rawContent: string,
+  objectiveTitle: string,
+  sourceUrl: string
+): Promise<ExtractionResult> {
+  const prompt = `You are extracting structured content from an official technical documentation page.
+The page is about: "${objectiveTitle}"
+Source URL: ${sourceUrl}
+
+Page content (markdown):
+---
+${rawContent.substring(0, 10000)}
+---
+
+Extract and return ONLY this valid JSON object:
+{
+  "title": "exact title of the documentation page",
+  "summary": "2-3 sentence clear technical summary of what this document covers",
+  "learning_outcomes": ["specific technical abilities, tasks, or concepts a reader learns from this page"],
+  "key_concepts": [
+    { "term": "technical term or component name", "definition": "concise one-sentence definition from the text" }
+  ],
+  "api_names": ["SDK classes, methods, REST endpoints, or CLI commands mentioned"],
+  "limits": ["quotas, constraints, size limits, or restrictions mentioned"],
+  "code_examples": ["verbatim code snippets or CLI examples from the page"]
+}
+Ensure key_concepts has at least 2 entries with real terms from the content. Return ONLY valid JSON.`;
+
+  const result = await createGroqJsonCompletion(prompt);
+  return normalizeExtractionResult(result);
+}
+
+/**
+ * Scrape a documentation URL using Scraper Studio (if a collector exists for
+ * the domain) or fall back to `brightdata discover --include-content` + Groq.
+ *
+ * The discover command is AI-powered: it finds the best matching doc page AND
+ * returns its full content in one call — no separate scrape step needed.
+ * This handles JS-rendered SPAs (Databricks, Red Hat) that return empty shells
+ * when scraped directly.
+ */
+async function scrapeDocUrl(
+  url: string,
+  objectiveTitle: string,
+  certTitle?: string
+): Promise<{ extraction: ExtractionResult; resolvedUrl: string }> {
+  const parsedUrl = new URL(url);
+  const hostname = parsedUrl.hostname;
+  const collectorId = getCollectorId(hostname, "doc_content");
+
+  if (collectorId) {
+    // Happy path: domain has a trained Scraper Studio collector
+    console.info(`[bdata-studio] Running collector ${collectorId} for ${hostname}`);
+    const runOut = await runBDataCli(["scraper", "run", collectorId, url, "--json"], 120_000);
+    let scrapeData: any;
     try {
-      res = JSON.parse(out);
+      scrapeData = JSON.parse(runOut);
+      if (Array.isArray(scrapeData)) scrapeData = scrapeData[0] || {};
     } catch {
       throw new Error(`scraper_run_failed`);
     }
-    collectorId = res.collector_id;
-    if (!collectorId) throw new Error(`scraper_run_failed`);
-    
-    try {
-      saveCollectorId(hostname, "doc_content", collectorId);
-    } catch (e) {
-      console.warn(`[bdata-studio] Failed to save collector ID:`, e);
-    }
+    return { extraction: normalizeExtractionResult(scrapeData), resolvedUrl: url };
   }
 
-  const runOut = await runBDataCli(["scraper", "run", collectorId, url, "--json"], 120_000);
-  let scrapeData: any;
-  try {
-    scrapeData = JSON.parse(runOut);
-    if (Array.isArray(scrapeData)) {
-      scrapeData = scrapeData[0] || {};
-    }
-  } catch {
-    throw new Error(`scraper_run_failed`);
+  // No Scraper Studio collector — use brightdata discover to find + fetch content
+  console.info(`[bdata-studio] No collector for ${hostname} — using discover + Groq extraction`);
+
+  const discovered = await discoverDocContent(objectiveTitle, hostname, certTitle);
+
+  if (discovered) {
+    // Got content directly from discover — skip the separate scrape call
+    const extraction = await extractFromRawContent(discovered.content, objectiveTitle, discovered.url);
+    return { extraction, resolvedUrl: discovered.url };
   }
-  return normalizeExtractionResult(scrapeData);
+
+  // discover found nothing — fall back to scraping the original URL directly
+  // (works for non-SPA pages; may return sparse content for SPA search pages)
+  console.info(`[bdata-studio] discover found nothing, scraping ${url} directly`);
+  const rawContent = await fetchWithWebUnlocker(url);
+  const extraction = await extractFromRawContent(rawContent, objectiveTitle, url);
+  return { extraction, resolvedUrl: url };
 }
 
 export async function scrapeObjectiveContent(
@@ -512,7 +668,10 @@ export async function scrapeObjectiveContent(
       scrapeMethod = "brightdata-scraper-studio-primary";
       
       try {
-        extractionResult = await scrapeDocUrl(resolved.url, objective.title);
+        const result = await scrapeDocUrl(resolved.url, objective.title, objective.cert_title);
+        extractionResult = result.extraction;
+        // Update source_url to the actual page scraped (may differ from search URL)
+        scrape_status.source_url = result.resolvedUrl;
       } catch (err: any) {
         scrape_status.outcome = "failed";
         scrape_status.failure_reason = "scraper_run_failed";
@@ -576,7 +735,9 @@ export async function scrapeObjectiveContent(
       scrape_status.source_url = docUrl;
 
       try {
-        extractionResult = await scrapeDocUrl(docUrl, objective.title);
+        const result = await scrapeDocUrl(docUrl, objective.title, objective.cert_title);
+        extractionResult = result.extraction;
+        scrape_status.source_url = result.resolvedUrl;
       } catch (err: any) {
         scrape_status.outcome = "failed";
         scrape_status.failure_reason = "scraper_run_failed";
@@ -589,43 +750,54 @@ export async function scrapeObjectiveContent(
     if (validation.is_valid) {
       scrape_status.outcome = "valid";
     } else {
-      if (!healAttempted) {
+      // Only attempt heal when a real Scraper Studio collector exists for this
+      // domain — the Web Unlocker fallback path has no collector to heal.
+      const hostname = new URL(scrape_status.source_url).hostname;
+      const collectorId = !healAttempted ? getCollectorId(hostname, "doc_content") : null;
+
+      if (collectorId) {
         healAttempted = true;
-        const hostname = new URL(scrape_status.source_url).hostname;
-        const collectorId = getCollectorId(hostname, "doc_content");
-        if (collectorId) {
-          try {
-            const healPrompt = `Please also extract: ${validation.missing_fields}`;
-            await runBDataCli(["scraper", "heal", collectorId, healPrompt, "--json"], 120_000);
-            await runBDataCli(["scraper", "approve", collectorId, "--json"], 60_000);
-            const runOut = await runBDataCli(["scraper", "run", collectorId, scrape_status.source_url, "--json"], 120_000);
-            let rawHealedData = JSON.parse(runOut);
-            if (Array.isArray(rawHealedData)) {
-              rawHealedData = rawHealedData[0] || {};
-            }
-            const healedData = normalizeExtractionResult(rawHealedData);
-            
-            const validation2 = validateExtractionResult(healedData, scrape_status.source_url);
-            if (validation2.is_valid) {
-              extractionResult = healedData as ExtractionResult;
-              scrape_status.healed = true;
-              scrape_status.outcome = "valid";
-              scrape_status.missing_fields_recovered = validation.missing_fields;
-            } else {
-              scrape_status.outcome = "failed";
-              scrape_status.failure_reason = "validation_failed_after_heal";
-              return { sources: [], combinedContent: "", scrapeMethod, scrape_status };
-            }
-          } catch (e) {
+        try {
+          // Use --auto-approve: the correct unattended heal pattern per Bright Data
+          // docs. Runs heal + approve atomically without a manual review gate.
+          const healPrompt = `The following fields are missing or empty. Please extract them: ${validation.missing_fields}`;
+          const healOut = await runBDataCli(
+            ["scraper", "heal", collectorId, healPrompt, "--auto-approve", "--json"],
+            180_000
+          );
+
+          // After heal+approve, run the scraper again to get updated data
+          const runOut = await runBDataCli(
+            ["scraper", "run", collectorId, scrape_status.source_url, "--json"],
+            120_000
+          );
+          let rawHealedData = JSON.parse(runOut);
+          if (Array.isArray(rawHealedData)) rawHealedData = rawHealedData[0] || {};
+          const healedData = normalizeExtractionResult(rawHealedData);
+
+          const validation2 = validateExtractionResult(healedData, scrape_status.source_url);
+          if (validation2.is_valid) {
+            extractionResult = healedData as ExtractionResult;
+            scrape_status.healed = true;
+            scrape_status.outcome = "valid";
+            scrape_status.missing_fields_recovered = validation.missing_fields;
+          } else {
             scrape_status.outcome = "failed";
             scrape_status.failure_reason = "validation_failed_after_heal";
             return { sources: [], combinedContent: "", scrapeMethod, scrape_status };
           }
-        } else {
-            scrape_status.outcome = "failed";
-            scrape_status.failure_reason = "validation_failed_after_heal";
-            return { sources: [], combinedContent: "", scrapeMethod, scrape_status };
+        } catch (e) {
+          scrape_status.outcome = "failed";
+          scrape_status.failure_reason = "validation_failed_after_heal";
+          return { sources: [], combinedContent: "", scrapeMethod, scrape_status };
         }
+      } else {
+        // No Scraper Studio collector (Web Unlocker path) — can't heal without
+        // a collector, so treat validation failure as a scrape failure so the
+        // caller can surface a meaningful retry message.
+        scrape_status.outcome = "failed";
+        scrape_status.failure_reason = "scraper_run_failed";
+        return { sources: [], combinedContent: "", scrapeMethod, scrape_status };
       }
     }
 
