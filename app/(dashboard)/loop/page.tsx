@@ -1,9 +1,42 @@
 'use client';
 
-import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 
 type View = 'overview' | 'learn' | 'question' | 'result';
+
+type TeachResponse = {
+  success?: boolean;
+  data?: unknown;
+  user_message?: string;
+  scrape_status?: {
+    source_url?: string;
+    outcome?: string;
+  };
+  reason?: string;
+  error?: string;
+};
+
+// Module-level in-flight request dedup. Promise sharing survives React Strict
+// Mode remounts while still delivering the result to the active component.
+const inflightTeachRequests = new Map<string, Promise<TeachResponse>>();
+
+function fetchTeachContent(objectiveId: string, force: boolean): Promise<TeachResponse> {
+  const requestKey = `${objectiveId}:${force ? 'force' : 'normal'}`;
+  const existing = inflightTeachRequests.get(requestKey);
+  if (existing) return existing;
+
+  const request = fetch(`/api/objectives/${objectiveId}/teach${force ? '?force=true' : ''}`)
+    .then((res) => res.json() as Promise<TeachResponse>)
+    .finally(() => {
+      if (inflightTeachRequests.get(requestKey) === request) {
+        inflightTeachRequests.delete(requestKey);
+      }
+    });
+
+  inflightTeachRequests.set(requestKey, request);
+  return request;
+}
 
 function LoopContent() {
   const searchParams = useSearchParams();
@@ -85,13 +118,18 @@ function LoopContent() {
     statusLabel?: string;
   } | null>(null);
 
+  // Sequence counter for "latest wins" when switching objectives
+  const teachSeqRef = useRef(0);
+
   // Load teaching content for the current objective
   const loadTeachContent = useCallback(async (objectiveId: string, force: boolean = false) => {
+    const seq = ++teachSeqRef.current;
+
     setTeachLoading(true);
     setTeachError(null);
     try {
-      const res = await fetch(`/api/objectives/${objectiveId}/teach${force ? '?force=true' : ''}`);
-      const data = await res.json();
+      const data = await fetchTeachContent(objectiveId, force);
+      if (teachSeqRef.current !== seq) return;
       if (data.success && data.data) {
         setTeachContent(data.data);
       } else {
@@ -103,13 +141,16 @@ function LoopContent() {
         });
       }
     } catch (err) {
+      if (teachSeqRef.current !== seq) return;
       console.error('[loop] loadTeachContent error:', err);
       setTeachError({
         message: "We encountered a temporary network issue connecting to the learning pipeline.",
         statusLabel: "Connection error"
       });
     } finally {
-      setTeachLoading(false);
+      if (teachSeqRef.current === seq) {
+        setTeachLoading(false);
+      }
     }
   }, []);
 
