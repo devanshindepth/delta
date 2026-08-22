@@ -83,17 +83,10 @@ export async function POST(
 
     const question = getQuestionById(id);
     if (!question) {
-      // If it's a runtime-generated question not yet in questions table
-      const body = await request.json();
-      const { answer } = body;
-      return NextResponse.json({
-        success: true,
-        data: {
-          isCorrect: true,
-          correctAnswer: 0,
-          explanation: "Answer verified.",
-        },
-      });
+      return NextResponse.json(
+        { success: false, error: "Question not found" },
+        { status: 404 }
+      );
     }
 
     const body = await request.json();
