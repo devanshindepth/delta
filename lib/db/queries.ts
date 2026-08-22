@@ -170,6 +170,29 @@ export function getQuestionById(id: string) {
   return parseQuestion(row);
 }
 
+export function savePracticeQuestion(data: any) {
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO practice_questions (
+      id, objective_id, question_type, difficulty, stem, options_json, correct_answer, explanation, official_doc_url, service_tags, validation_status
+    ) VALUES (
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    )
+  `).run(
+    data.id,
+    data.objective_id,
+    data.question_type,
+    data.difficulty,
+    data.stem,
+    data.options ? JSON.stringify(data.options) : null,
+    typeof data.correct_answer === 'object' ? JSON.stringify(data.correct_answer) : data.correct_answer,
+    data.explanation,
+    data.official_doc_url,
+    data.service_tags ? JSON.stringify(data.service_tags) : '[]',
+    data.validation_status
+  );
+}
+
 function parseQuestion(row: any) {
   return {
     ...row,
