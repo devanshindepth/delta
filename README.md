@@ -51,13 +51,13 @@
               ▼                               ▼
 ┌───────────────────────────┐   ┌───────────────────────────┐
 │     Ingestion Engine      │   │    Persistence & Auth     │
-│ Bright Data SDK + Cheerio │   │ Better Auth + SQLite (WAL)│
+│ Bright Data Discover + AI │   │ Better Auth + SQLite (WAL)│
+│  & Web Unlocker + Cheerio │   │    (Vercel /tmp DB)       │
 └─────────────┬─────────────┘   └───────────────────────────┘
               │ (Raw Blueprints & Docs)
               ▼
 ┌───────────────────────────────────────────────────────────┐
-│                      Groq AI Engine                       │
-│    (Dynamic Fallback: gpt-oss-120b / Llama-3.3-70b)       │
+│                      Groq AI Engine                       │ 
 └─────────────────────────────┬─────────────────────────────┘
                               │ (Structured Blueprint JSON)
                               ▼
@@ -74,7 +74,7 @@
 
 1. **Ingestion & Web Scraping Pipeline (`lib/ingestion/`)**:
    - Fetches live certification blueprints directly from vendor portals (AWS, Microsoft, GCP, CNCF, HashiCorp).
-   - Combines Bright Data Web Unlocker / Scraper Studio CLI with Cheerio parsing to keep syllabus data fresh and resilient.
+   - Combines Bright Data Web Unlocker, AI-powered Discover (`brightdata discover`), and Scraper Studio CLI with Cheerio parsing to keep syllabus data fresh and resilient, handling JS-rendered SPAs effortlessly.
 
 2. **AI Synthesizer & Groq Orchestration (`lib/groq.ts`)**:
    - Uses Groq SDK with automatic dynamic model discovery (`openai/gpt-oss-120b`) and fallback routing.
@@ -82,6 +82,7 @@
 
 3. **Data Persistence Layer (`lib/db/`)**:
    - High-performance SQLite database driven by `better-sqlite3` with Write-Ahead Logging (WAL) and strict foreign key enforcement.
+   - Adapts to Vercel Serverless environments using pre-built database bundles in `/tmp` for fast cold starts.
    - Houses user accounts, active sessions, syllabus structures, user progress tracking, and readiness metrics.
 
 4. **Authentication & Session Management (`lib/auth.ts`)**:
@@ -159,7 +160,7 @@ GROQ_MODEL=openai/gpt-oss-120b
 BETTER_AUTH_SECRET=your_secret_here
 BETTER_AUTH_URL=http://localhost:3000
 BRIGHT_DATA_API_KEY=...
-BRIGHT_DATA_ZONE=web_unlocker1
+BRIGHT_DATA_ZONE=cli_unlocker
 ```
 
 ### seed the database (optional)
